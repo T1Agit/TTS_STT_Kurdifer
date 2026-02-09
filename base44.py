@@ -11,6 +11,7 @@ class Base44:
     """Base44 encoder/decoder using 44-character alphabet"""
     
     # First 44 characters: A-Z (26), 0-9 (10), a-h (8) = 44 chars
+    # Using slice [:44] for defensive programming to ensure exactly 44 characters
     ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefgh-_"[:44]
     BASE = 44
     

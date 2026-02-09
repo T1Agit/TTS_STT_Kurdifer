@@ -53,7 +53,7 @@ class TTSSTTServiceBase44:
         self,
         text: str,
         language: str = 'en',
-        format: str = 'mp3'
+        audio_format: str = 'mp3'
     ) -> Dict[str, str]:
         """
         Convert text to speech and encode to Base44
@@ -61,7 +61,7 @@ class TTSSTTServiceBase44:
         Args:
             text: Text to convert to speech
             language: Target language (e.g., 'en', 'english', 'ku')
-            format: Audio format ('mp3', 'wav', 'ogg')
+            audio_format: Audio format ('mp3', 'wav', 'ogg')
             
         Returns:
             Dictionary with audio data and metadata
@@ -85,7 +85,7 @@ class TTSSTTServiceBase44:
             
             # Convert to desired format
             output_buffer = io.BytesIO()
-            audio.export(output_buffer, format=format)
+            audio.export(output_buffer, format=audio_format)
             audio_bytes = output_buffer.getvalue()
             
             # Encode to Base44
@@ -96,7 +96,7 @@ class TTSSTTServiceBase44:
             return {
                 'audio': audio_base44,
                 'language': lang_code,
-                'format': format,
+                'format': audio_format,
                 'text': text,
                 'size': len(audio_bytes),
                 'encoded_size': len(audio_base44),

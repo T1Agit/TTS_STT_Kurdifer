@@ -7,6 +7,7 @@
 
 const { encode, decode } = require('./base44');
 const fs = require('fs');
+const os = require('os');
 
 console.log("=".repeat(70));
 console.log("Base44 TTS/STT Integration Test");
@@ -56,12 +57,15 @@ const testBuffer = Buffer.from(testContent);
 const testEncoded = encode(testBuffer);
 
 // Simulate saving
+const tempDir = os.tmpdir();
+const testFilePath = `${tempDir}/test_base44.txt`;
+
 try {
-    fs.writeFileSync('/tmp/test_base44.txt', testEncoded);
+    fs.writeFileSync(testFilePath, testEncoded);
     console.log("✅ Saved encoded data to file");
     
     // Simulate loading
-    const loadedEncoded = fs.readFileSync('/tmp/test_base44.txt', 'utf-8');
+    const loadedEncoded = fs.readFileSync(testFilePath, 'utf-8');
     const loadedBuffer = decode(loadedEncoded);
     const loadedContent = loadedBuffer.toString('utf-8');
     
@@ -74,7 +78,7 @@ try {
     }
     
     // Cleanup
-    fs.unlinkSync('/tmp/test_base44.txt');
+    fs.unlinkSync(testFilePath);
 } catch (error) {
     console.log(`❌ File operation error: ${error.message}`);
     allPassed = false;
