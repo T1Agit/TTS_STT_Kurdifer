@@ -12,3 +12,12 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+
+# Coqui TTS model cache
+.models/
+tts_models/
+.cache/
+
+# Python virtual environment
+venv/
+env/

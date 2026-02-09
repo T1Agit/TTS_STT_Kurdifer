@@ -19,12 +19,12 @@ def check_dependencies():
     
     try:
         import TTS
-        print("✅ TTS package is installed")
+        print("✅ Coqui TTS package is installed")
         return True
     except ImportError:
-        print("❌ TTS package is not installed")
+        print("❌ Coqui TTS package is not installed")
         print("\n📦 Installing Coqui TTS...")
-        print("   Run: pip install TTS")
+        print("   Run: pip install coqui-tts")
         return False
 
 
@@ -110,7 +110,7 @@ def setup_kurdish_model():
         print("\n💡 Troubleshooting:")
         print("   1. Make sure you have enough disk space (~2GB)")
         print("   2. Check your internet connection")
-        print("   3. Try running: pip install --upgrade TTS")
+        print("   3. Try running: pip install --upgrade coqui-tts")
         return False
 
 
