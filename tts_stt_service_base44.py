@@ -7,6 +7,7 @@ for Kurdish, German, French, English, and Turkish languages.
 
 import io
 import os
+import tempfile
 from typing import Dict
 from gtts import gTTS
 from pydub import AudioSegment
@@ -75,7 +76,6 @@ class TTSSTTServiceBase44:
         """
         try:
             from TTS.api import TTS
-            import tempfile
             
             # Lazy initialization of Coqui TTS
             if self._coqui_tts is None:
@@ -105,7 +105,6 @@ class TTSSTTServiceBase44:
                 wav_bytes = f.read()
             
             # Clean up temporary file
-            import os
             os.unlink(temp_path)
             
             # Convert WAV to MP3 using pydub

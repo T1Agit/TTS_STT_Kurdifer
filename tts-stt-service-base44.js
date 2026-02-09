@@ -64,17 +64,19 @@ class TTSSTTServiceBase44 {
         return new Promise((resolve, reject) => {
             const { spawn } = require('child_process');
             
-            // Escape text for Python string
-            const escapedText = text.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n');
-            
             const pythonCode = `
-from tts_stt_service_base44 import TTSSTTServiceBase44
-import json
 import sys
+import json
+from tts_stt_service_base44 import TTSSTTServiceBase44
 
 try:
+    # Read text from stdin for security
+    text = sys.stdin.read().strip()
+    lang_code = sys.argv[1]
+    
     service = TTSSTTServiceBase44()
-    result = service.text_to_speech_base44("${escapedText}", "${langCode}")
+    result = service.text_to_speech_base44(text, lang_code)
+    
     # Return only the essential data as JSON
     output = {
         'audio': result['audio'],
@@ -85,14 +87,19 @@ try:
     }
     print(json.dumps(output))
 except Exception as e:
-    print(json.dumps({'error': str(e)}), file=sys.stderr)
+    error_data = {'error': str(e)}
+    print(json.dumps(error_data), file=sys.stderr)
     sys.exit(1)
 `;
             
-            const python = spawn('python3', ['-c', pythonCode]);
+            const python = spawn('python3', ['-c', pythonCode, langCode]);
             
             let stdout = '';
             let stderr = '';
+            
+            // Send text via stdin for security
+            python.stdin.write(text);
+            python.stdin.end();
             
             python.stdout.on('data', (data) => {
                 stdout += data.toString();
@@ -111,6 +118,12 @@ except Exception as e:
                 try {
                     // Find JSON in stdout (skip any log lines)
                     const lines = stdout.trim().split('\n');
+                    
+                    if (lines.length === 0 || !lines[lines.length - 1]) {
+                        reject(new Error('No output from Python service'));
+                        return;
+                    }
+                    
                     const jsonLine = lines[lines.length - 1]; // Last line should be JSON
                     const result = JSON.parse(jsonLine);
                     
