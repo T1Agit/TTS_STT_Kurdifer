@@ -119,7 +119,8 @@ except Exception as e:
                     // Find JSON in stdout (skip any log lines)
                     const lines = stdout.trim().split('\n');
                     
-                    if (lines.length === 0 || !lines[lines.length - 1]) {
+                    // Check for empty output
+                    if (lines.length === 0 || !lines[lines.length - 1].trim()) {
                         reject(new Error('No output from Python service'));
                         return;
                     }

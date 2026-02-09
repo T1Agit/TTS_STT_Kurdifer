@@ -149,7 +149,7 @@ testLanguages.forEach(([input, expected]) => {
 });
 
 // Test 5: Kurdish TTS Engine Selection
-console.log("\n🇹🇯 Test 5: Kurdish TTS Engine Selection");
+console.log("\n🎤 Test 5: Kurdish TTS Engine Selection");
 console.log("-".repeat(70));
 
 try {

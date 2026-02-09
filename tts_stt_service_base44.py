@@ -81,7 +81,9 @@ class TTSSTTServiceBase44:
             if self._coqui_tts is None:
                 print("🔧 Initializing Coqui TTS for Kurdish...")
                 # Use a multilingual model that supports Kurdish
-                # Note: We'll use a model that can handle Kurdish text
+                # Note: First-time initialization will download ~2GB of model data
+                # and may take 2-5 minutes depending on network speed.
+                # Subsequent calls will use cached model and be much faster.
                 self._coqui_tts = TTS(
                     model_name="tts_models/multilingual/multi-dataset/xtts_v2",
                     progress_bar=False

@@ -24,7 +24,7 @@ A comprehensive Text-to-Speech (TTS) and Speech-to-Text (STT) service with Base4
 - 💾 **File Operations**: Save and load audio files
 - 🌐 **CORS Enabled**: Ready for web applications
 
-## 🇹🇯 Kurdish Language Support
+## 🌐 Kurdish Language Support
 
 Kurdish (Kurmanji) uses **Coqui TTS** engine with the **XTTS v2 multilingual model**, which provides high-quality speech synthesis for Kurdish.
 
