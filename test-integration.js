@@ -148,8 +148,34 @@ testLanguages.forEach(([input, expected]) => {
     }
 });
 
-// Test 5: Error Handling
-console.log("\n⚠️  Test 5: Error Handling");
+// Test 5: Kurdish TTS Engine Selection
+console.log("\n🎤 Test 5: Kurdish TTS Engine Selection");
+console.log("-".repeat(70));
+
+try {
+    const usesGTTS_en = !service._usesCoquiTTS('en');
+    const usesCoqui_ku = service._usesCoquiTTS('ku');
+    
+    if (usesGTTS_en) {
+        console.log("✅ English (en) uses gTTS");
+    } else {
+        console.log("❌ English (en) should use gTTS");
+        allPassed = false;
+    }
+    
+    if (usesCoqui_ku) {
+        console.log("✅ Kurdish (ku) uses Coqui TTS");
+    } else {
+        console.log("❌ Kurdish (ku) should use Coqui TTS");
+        allPassed = false;
+    }
+} catch (error) {
+    console.log(`❌ Error testing TTS engine selection: ${error.message}`);
+    allPassed = false;
+}
+
+// Test 6: Error Handling
+console.log("\n⚠️  Test 6: Error Handling");
 console.log("-".repeat(70));
 
 // Test invalid language
