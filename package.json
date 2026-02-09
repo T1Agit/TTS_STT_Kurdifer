@@ -5,7 +5,9 @@
   "main": "api-server-base44.js",
   "scripts": {
     "start": "node api-server-base44.js",
-    "test": "node base44.js && node tts-stt-service-base44.js",
+    "test": "node base44.js && node test-integration.js",
+    "test:base44": "node base44.js && python3 base44.py",
+    "test:integration": "node test-integration.js",
     "dev": "nodemon api-server-base44.js",
     "demo": "node tts-stt-service-base44.js",
     "client": "node client-example.js"

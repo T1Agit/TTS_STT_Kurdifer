@@ -1,0 +1,14 @@
+node_modules/
+output_*.mp3
+*.mp3
+*.wav
+.env
+.DS_Store
+npm-debug.log
+yarn-error.log
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
