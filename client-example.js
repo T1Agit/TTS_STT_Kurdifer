@@ -126,13 +126,15 @@ async function demo() {
         
         // Example 1: Kurdish TTS
         console.log("\n" + "-".repeat(70));
-        console.log("📝 Example 1: Kurdish Text-to-Speech");
+        console.log("📝 Example 1: Kurdish Text-to-Speech (Coqui TTS)");
         console.log("-".repeat(70));
         
-        const kurdishText = "Silav, tu îro çawa yî?";
+        const kurdishText = "Silav, tu çawa yî? Ez bi xêr im, spas!";
         console.log(`Text: ${kurdishText}`);
         console.log("Language: Kurdish (ku)");
+        console.log("Engine: Coqui TTS (XTTS v2)");
         
+        console.log("\n⏳ Generating Kurdish audio (may take longer on first run)...");
         const ttsResult = await client.textToSpeech(kurdishText, 'kurdish');
         console.log(`\n✅ TTS Success!`);
         console.log(`  Audio size: ${ttsResult.data.size} bytes`);

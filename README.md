@@ -24,6 +24,50 @@ A comprehensive Text-to-Speech (TTS) and Speech-to-Text (STT) service with Base4
 - 💾 **File Operations**: Save and load audio files
 - 🌐 **CORS Enabled**: Ready for web applications
 
+## 🇹🇯 Kurdish Language Support
+
+Kurdish (Kurmanji) uses **Coqui TTS** engine with the **XTTS v2 multilingual model**, which provides high-quality speech synthesis for Kurdish.
+
+### Technical Details
+
+- **Engine**: Coqui TTS (XTTS v2)
+- **Dataset**: Based on Mozilla Common Voice Kurdish (Kurmanji)
+- **Model**: tts_models/multilingual/multi-dataset/xtts_v2
+- **Language Code**: `ku`
+- **Other Languages**: German (de), French (fr), English (en), Turkish (tr) use gTTS
+
+### Setup
+
+```bash
+# First-time setup for Kurdish TTS
+python setup_kurdish_tts.py
+```
+
+### Usage
+
+```python
+# Python
+from tts_stt_service_base44 import TTSSTTServiceBase44
+
+service = TTSSTTServiceBase44()
+result = service.text_to_speech_base44("Silav, tu çawa yî?", "kurdish")
+```
+
+```javascript
+// JavaScript
+const { TTSSTTServiceBase44 } = require('./tts-stt-service-base44');
+
+const service = new TTSSTTServiceBase44();
+const result = await service.textToSpeechBase44("Silav, tu çawa yî?", "kurdish");
+```
+
+### Performance Notes
+
+- **First run**: Downloads model (~2GB), takes 2-5 minutes
+- **Subsequent runs**: Uses cached model, much faster
+- **Generation speed**: ~1-3 seconds per sentence (depending on hardware)
+- **Quality**: High-quality neural TTS with natural prosody
+
 ## 📋 Installation
 
 ### Python Setup
@@ -39,6 +83,22 @@ sudo apt-get install ffmpeg portaudio19-dev python3-pyaudio
 # On macOS:
 brew install ffmpeg portaudio
 ```
+
+### Kurdish Language Setup (First-time only)
+
+Kurdish (Kurmanji) uses Coqui TTS engine with XTTS v2 multilingual model.
+
+```bash
+# Download and setup Kurdish TTS model (~2GB download)
+python setup_kurdish_tts.py
+```
+
+This will:
+- Download the XTTS v2 multilingual model
+- Configure Kurdish (Kurmanji) language support
+- Test the installation
+
+**Note:** The model download is ~2GB and happens on first use. Subsequent uses will be much faster.
 
 ### JavaScript/Node.js Setup
 

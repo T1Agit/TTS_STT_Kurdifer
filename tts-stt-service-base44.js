@@ -44,6 +44,98 @@ class TTSSTTServiceBase44 {
     }
 
     /**
+     * Check if language requires Coqui TTS (via Python)
+     * @private
+     * @param {string} langCode - Language code
+     * @returns {boolean} True if language needs Coqui TTS
+     */
+    _usesCoquiTTS(langCode) {
+        return langCode === 'ku';
+    }
+
+    /**
+     * Generate speech using Python service (for Coqui TTS/Kurdish)
+     * @private
+     * @param {string} text - Text to convert
+     * @param {string} langCode - Language code
+     * @returns {Promise<Buffer>} Audio buffer
+     */
+    _generateSpeechPython(text, langCode) {
+        return new Promise((resolve, reject) => {
+            const { spawn } = require('child_process');
+            
+            // Escape text for Python string
+            const escapedText = text.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n');
+            
+            const pythonCode = `
+from tts_stt_service_base44 import TTSSTTServiceBase44
+import json
+import sys
+
+try:
+    service = TTSSTTServiceBase44()
+    result = service.text_to_speech_base44("${escapedText}", "${langCode}")
+    # Return only the essential data as JSON
+    output = {
+        'audio': result['audio'],
+        'language': result['language'],
+        'format': result['format'],
+        'size': result['size'],
+        'encoded_size': result['encoded_size']
+    }
+    print(json.dumps(output))
+except Exception as e:
+    print(json.dumps({'error': str(e)}), file=sys.stderr)
+    sys.exit(1)
+`;
+            
+            const python = spawn('python3', ['-c', pythonCode]);
+            
+            let stdout = '';
+            let stderr = '';
+            
+            python.stdout.on('data', (data) => {
+                stdout += data.toString();
+            });
+            
+            python.stderr.on('data', (data) => {
+                stderr += data.toString();
+            });
+            
+            python.on('close', (code) => {
+                if (code !== 0) {
+                    reject(new Error(`Python TTS failed: ${stderr || 'Unknown error'}`));
+                    return;
+                }
+                
+                try {
+                    // Find JSON in stdout (skip any log lines)
+                    const lines = stdout.trim().split('\n');
+                    const jsonLine = lines[lines.length - 1]; // Last line should be JSON
+                    const result = JSON.parse(jsonLine);
+                    
+                    if (result.error) {
+                        reject(new Error(result.error));
+                        return;
+                    }
+                    
+                    // Convert Base44 audio to Buffer
+                    const { decode } = require('./base44');
+                    const audioBuffer = decode(result.audio);
+                    
+                    resolve(audioBuffer);
+                } catch (error) {
+                    reject(new Error(`Failed to parse Python output: ${error.message}`));
+                }
+            });
+            
+            python.on('error', (error) => {
+                reject(new Error(`Failed to spawn Python: ${error.message}`));
+            });
+        });
+    }
+
+    /**
      * Generate speech using node-gtts
      * @private
      * @param {string} text - Text to convert
@@ -104,8 +196,15 @@ class TTSSTTServiceBase44 {
             
             console.log(`🎤 Generating speech: '${text.substring(0, 50)}...' in ${langCode}`);
             
-            // Generate speech
-            const audioBuffer = await this._generateSpeech(text, langCode);
+            // Check if we need to use Coqui TTS via Python for Kurdish
+            let audioBuffer;
+            if (this._usesCoquiTTS(langCode)) {
+                // Use Python service with Coqui TTS for Kurdish
+                audioBuffer = await this._generateSpeechPython(text, langCode);
+            } else {
+                // Generate speech using node-gtts for other languages
+                audioBuffer = await this._generateSpeech(text, langCode);
+            }
             
             // Encode to Base44
             const audioBase44 = encode(audioBuffer);
