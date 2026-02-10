@@ -253,7 +253,48 @@ Base44 is a custom encoding scheme that:
 
 ## 🚢 Deployment
 
-### Railway (Current)
+### Docker (Recommended for Local/Production)
+
+#### Quick Start with Docker Compose
+```bash
+# Build and start the service
+docker-compose up -d
+
+# Check logs
+docker-compose logs -f
+
+# Stop the service
+docker-compose down
+```
+
+#### Using Docker directly
+```bash
+# Build the image
+docker build -t kurdish-tts-stt .
+
+# Run the container
+docker run -d -p 5000:5000 \
+  --name kurdish-tts \
+  -e PORT=5000 \
+  -e FLASK_ENV=production \
+  kurdish-tts-stt
+
+# View logs
+docker logs -f kurdish-tts
+
+# Stop container
+docker stop kurdish-tts
+docker rm kurdish-tts
+```
+
+#### Features
+- ✅ Pre-configured with all dependencies
+- ✅ Includes ffmpeg for audio processing
+- ✅ Caches TTS models to avoid re-downloading
+- ✅ Health checks included
+- ✅ Production-ready
+
+### Railway (Cloud Hosting)
 1. Fork this repo
 2. Connect to Railway
 3. Set start command: `python api_server.py`
@@ -287,9 +328,9 @@ MAX_TEXT_LENGTH=500          # Max characters per request
 - [x] Base44 encoding
 - [x] Kurdish voice training guide
 - [x] Speech-to-Text (STT) implementation
+- [x] Docker support
 - [ ] Voice cloning
 - [ ] Raspberry Pi setup guide
-- [ ] Docker support
 
 ---
 
