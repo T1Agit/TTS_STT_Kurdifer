@@ -99,3 +99,12 @@ const Base44 = {
         return result;
     }
 };
+
+// Node.js module exports
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        Base44,
+        encode: (data) => Base44.encode(data),
+        decode: (str) => Base44.decode(str)
+    };
+}
