@@ -9,6 +9,7 @@ A multilingual Text-to-Speech (TTS) and Speech-to-Text (STT) API with custom Bas
 - **REST API**: Simple HTTP endpoints
 - **Web UI**: Browser-based interface
 - **Railway Deployed**: Live 24/7
+- **Kurdish STT**: ✅ Google STT supports Kurdish (Kurmanji) - [See Verification](KURDISH_STT_VERIFICATION.md)
 
 ---
 
@@ -189,6 +190,23 @@ This service ensures **Kurdish language integrity** by implementing a strict no-
 - **Never falls back** to other languages or engines
 - Ensures accurate Kurdish transcription
 
+##### Google STT Support for Kurdish
+**✅ YES - Google STT supports Kurdish (Kurmanji)**
+
+- **Language Code:** `ku` (ISO 639-1)
+- **Service Used:** Google Web Speech API (free tier)
+- **Quality:** Basic support, suitable for development/testing
+- **Status:** Verified and functional - [See detailed verification report](KURDISH_STT_VERIFICATION.md)
+
+**Key Points:**
+- Google Cloud Speech-to-Text API officially supports Kurdish
+- Web Speech API (used by this repo) has limited but functional support
+- Best results with high-quality audio (16kHz+, clear recordings)
+- For production use, consider upgrading to paid Google Cloud API
+
+**For detailed information, limitations, and recommendations:**
+📄 **[Read the Kurdish STT Verification Report](KURDISH_STT_VERIFICATION.md)**
+
 #### Why No Fallback?
 1. **Language Integrity**: Prevents mixing Kurdish with other languages
 2. **Quality Assurance**: Ensures users get Kurdish-specific models
@@ -317,6 +335,39 @@ PORT=8080                    # Server port
 FLASK_ENV=production         # Flask environment
 MAX_TEXT_LENGTH=500          # Max characters per request
 ```
+
+---
+
+## ❓ Frequently Asked Questions (FAQ)
+
+### Is Google's STT able to do Kurdish (Kurmanji)?
+
+**✅ YES!** Google's Speech-to-Text services support Kurdish (Kurmanji) using language code `ku`.
+
+**Quick Facts:**
+- ✅ **Works:** Google Web Speech API accepts Kurdish with code `ku`
+- ✅ **Functional:** Implementation is active in this repository
+- ⚠️ **Quality:** Basic support on free tier, better on paid Google Cloud API
+- ✅ **Verified:** Tested with SpeechRecognition library version 3.14.5
+
+**For Production Use:**
+- Current: Free Google Web Speech API (suitable for development/testing)
+- Recommended: Google Cloud Speech-to-Text API (higher accuracy, paid)
+- Alternative: Coqui STT with custom Kurdish model
+
+📄 **[Complete verification report and technical details →](KURDISH_STT_VERIFICATION.md)**
+
+### How accurate is Kurdish STT?
+Accuracy depends on:
+- Audio quality (16kHz+ recommended)
+- Clear pronunciation
+- Minimal background noise
+- Using native Kurdish speakers
+
+The free Web Speech API provides basic support. For production applications requiring high accuracy, we recommend upgrading to Google Cloud Speech-to-Text API.
+
+### What Kurdish dialect is supported?
+The language code `ku` typically refers to **Kurmanji (Northern Kurdish)**. Google Cloud Speech-to-Text officially supports Kurdish, primarily Kurmanji dialect.
 
 ---
 
