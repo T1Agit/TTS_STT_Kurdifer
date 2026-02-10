@@ -44,6 +44,26 @@ def tts():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/stt', methods=['POST'])
+def stt():
+    data = request.json
+    audio_base44 = data.get('audio')
+    language = data.get('language', 'english')
+    
+    if not audio_base44:
+        return jsonify({'success': False, 'error': 'Missing audio data'}), 400
+    
+    try:
+        result = service.speech_to_text_from_base44(audio_base44, language)
+        return jsonify({
+            'success': True,
+            'text': result['text'],
+            'language': result['language'],
+            'confidence': result.get('confidence', 1.0)
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/languages', methods=['GET'])
 def languages():
     return jsonify({'languages': list(service.SUPPORTED_LANGUAGES.keys())})

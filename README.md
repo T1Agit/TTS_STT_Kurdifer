@@ -58,10 +58,31 @@ Content-Type: application/json
 **Response:**
 ```json
 {
+  "success": true,
   "audio": "DAMc3XX6M5QeVe66PDYfMO8fLGGc...",
   "format": "mp3",
+  "language": "english"
+}
+```
+
+### 4. Speech-to-Text (STT)
+```bash
+POST /stt
+Content-Type: application/json
+
+{
+  "audio": "DAMc3XX6M5QeVe66PDYfMO8fLGGc...",
+  "language": "english"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "text": "Hello, how are you?",
   "language": "english",
-  "size": 8973
+  "confidence": 0.95
 }
 ```
 
@@ -150,6 +171,37 @@ Use Google Colab for FREE GPU training:
 
 ---
 
+## 🎯 Kurdish Language - No Fallback Policy
+
+### Important: Language Integrity Guarantee
+
+This service ensures **Kurdish language integrity** by implementing a strict no-fallback policy:
+
+#### Text-to-Speech (TTS)
+- **Kurdish (ku)** → Always uses **Coqui TTS** with XTTS v2 model
+- If Coqui TTS is not available or fails, the service raises an error
+- **Never falls back** to other TTS engines or languages
+- Guarantees authentic Kurdish pronunciation
+
+#### Speech-to-Text (STT)
+- **Kurdish (ku)** → Always uses **Google Speech Recognition** with 'ku' language code
+- If recognition fails, the service raises an error
+- **Never falls back** to other languages or engines
+- Ensures accurate Kurdish transcription
+
+#### Why No Fallback?
+1. **Language Integrity**: Prevents mixing Kurdish with other languages
+2. **Quality Assurance**: Ensures users get Kurdish-specific models
+3. **Transparency**: Errors are explicit rather than silent degradation
+4. **Base44 Frontend**: Base44 encoding handles all data transfer reliably
+
+#### Error Handling
+- If Kurdish TTS fails: `RuntimeError: Kurdish TTS generation failed`
+- If Kurdish STT fails: `ValueError: Could not understand Kurdish audio`
+- If Coqui TTS not installed: `ImportError: Coqui TTS is not installed`
+
+---
+
 ## 🗂️ Project Structure
 
 ```
@@ -233,8 +285,8 @@ MAX_TEXT_LENGTH=500          # Max characters per request
 - [x] Railway deployment
 - [x] Multi-language support
 - [x] Base44 encoding
-- [ ] Kurdish voice training guide
-- [ ] Speech-to-Text (STT) implementation
+- [x] Kurdish voice training guide
+- [x] Speech-to-Text (STT) implementation
 - [ ] Voice cloning
 - [ ] Raspberry Pi setup guide
 - [ ] Docker support

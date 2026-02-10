@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  tts-stt-api:
+    build: .
+    container_name: kurdish-tts-stt
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - FLASK_ENV=production
+      - MAX_TEXT_LENGTH=500
+    volumes:
+      # Cache Coqui TTS models to avoid re-downloading
+      - tts-cache:/root/.local/share/tts
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:5000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  tts-cache:
+    name: kurdish-tts-cache

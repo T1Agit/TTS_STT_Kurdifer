@@ -3,6 +3,12 @@ TTS/STT Service with Base44 Encoding
 
 Provides Text-to-Speech and Speech-to-Text functionality with Base44 encoding
 for Kurdish, German, French, English, and Turkish languages.
+
+IMPORTANT - NO FALLBACK POLICY:
+- Kurdish (ku) ALWAYS uses Coqui TTS for TTS - never falls back to other engines
+- Kurdish (ku) ALWAYS uses Google STT with 'ku' language code - never falls back
+- If Kurdish TTS/STT fails, an error is raised instead of falling back to another language
+- This ensures Kurdish language integrity and prevents mixing languages
 """
 
 import io
@@ -123,7 +129,9 @@ class TTSSTTServiceBase44:
             ) from e
         except Exception as e:
             print(f"❌ Coqui TTS error: {e}")
-            raise RuntimeError(f"Coqui TTS generation failed: {e}") from e
+            # NO FALLBACK: Kurdish TTS must use Coqui TTS only
+            # If Coqui TTS fails, we raise an error instead of falling back to other engines
+            raise RuntimeError(f"Kurdish TTS generation failed: {e}") from e
     
     def text_to_speech_base44(
         self,
@@ -256,10 +264,13 @@ class TTSSTTServiceBase44:
             
         except sr.UnknownValueError:
             print("❌ Could not understand audio")
-            raise ValueError("Could not understand audio")
+            # NO FALLBACK: If Kurdish speech cannot be recognized, we raise an error
+            # instead of falling back to another language
+            raise ValueError("Could not understand Kurdish audio")
         except sr.RequestError as e:
             print(f"❌ API error: {e}")
-            raise
+            # NO FALLBACK: API errors are raised directly without fallback
+            raise RuntimeError(f"Kurdish STT API error: {e}") from e
         except Exception as e:
             print(f"❌ Error in speech_to_text_from_base44: {e}")
             raise
