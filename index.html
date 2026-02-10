@@ -4,9 +4,349 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Kurdish TTS/STT API - Convert text to speech in Kurdish, English, German, French, and Turkish with Base44 encoding">
-    <title>Kurdish TTS/STT API</title>
+    <title>Kurdish TTS/STT API - Text to Speech</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+        }
+        
+        h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        
+        .subtitle {
+            color: #666;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        
+        .status {
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+            font-size: 14px;
+        }
+        
+        .status.loading {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .status.hidden {
+            display: none;
+        }
+        
+        label {
+            display: block;
+            color: #333;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        
+        textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            resize: vertical;
+            min-height: 120px;
+            font-family: inherit;
+            transition: border-color 0.3s;
+        }
+        
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            background: white;
+            cursor: pointer;
+            transition: border-color 0.3s;
+        }
+        
+        select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        button {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .audio-player {
+            margin-top: 20px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            display: none;
+        }
+        
+        .audio-player.show {
+            display: block;
+        }
+        
+        audio {
+            width: 100%;
+            margin-top: 10px;
+        }
+        
+        .info {
+            margin-top: 10px;
+            font-size: 12px;
+            color: #666;
+            line-height: 1.6;
+        }
+        
+        .footer {
+            margin-top: 30px;
+            text-align: center;
+            color: #999;
+            font-size: 12px;
+        }
+        
+        .footer a {
+            color: #667eea;
+            text-decoration: none;
+        }
+        
+        .footer a:hover {
+            text-decoration: underline;
+        }
+        
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 8px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
 </head>
 <body>
-    <h1>Hello, World!</h1>
+    <div class="container">
+        <h1>🎤 Kurdish TTS/STT</h1>
+        <p class="subtitle">Text-to-Speech with Base44 Encoding</p>
+        
+        <div id="status" class="status hidden"></div>
+        
+        <form id="ttsForm">
+            <div class="form-group">
+                <label for="text">Enter Text:</label>
+                <textarea 
+                    id="text" 
+                    name="text" 
+                    placeholder="Type something to convert to speech..."
+                    required
+                >Hello, how are you today?</textarea>
+            </div>
+            
+            <div class="form-group">
+                <label for="language">Select Language:</label>
+                <select id="language" name="language" required>
+                    <option value="english">🇬🇧 English</option>
+                    <option value="german">🇩🇪 German (Deutsch)</option>
+                    <option value="french">🇫🇷 French (Français)</option>
+                    <option value="turkish">🇹🇷 Turkish (Türkçe)</option>
+                    <option value="kurdish">🟡🔴🟢 Kurdish (Kurdî)</option>
+                </select>
+            </div>
+            
+            <button type="submit" id="submitBtn">
+                🎵 Generate Speech
+            </button>
+        </form>
+        
+        <div id="audioPlayer" class="audio-player">
+            <h3>🔊 Generated Audio:</h3>
+            <audio id="audio" controls></audio>
+            <div class="info" id="audioInfo"></div>
+        </div>
+        
+        <div class="footer">
+            Powered by <a href="https://github.com/T1Agit/TTS_STT_Kurdifer" target="_blank">TTS_STT_Kurdifer</a><br>
+            API: <a href="https://ttssttkurdifer-production.up.railway.app" target="_blank">Railway</a>
+        </div>
+    </div>
+
+    <script src="base44.js"></script>
+    <script>
+        const API_URL = 'https://ttssttkurdifer-production.up.railway.app';
+        
+        const form = document.getElementById('ttsForm');
+        const statusDiv = document.getElementById('status');
+        const audioPlayer = document.getElementById('audioPlayer');
+        const audio = document.getElementById('audio');
+        const audioInfo = document.getElementById('audioInfo');
+        const submitBtn = document.getElementById('submitBtn');
+        
+        // Check API health on load
+        checkAPIHealth();
+        
+        async function checkAPIHealth() {
+            try {
+                const response = await fetch(`${API_URL}/health`);
+                const data = await response.json();
+                if (data.status === 'healthy') {
+                    showStatus('API is online and ready! 🟢', 'success');
+                    setTimeout(() => hideStatus(), 3000);
+                }
+            } catch (error) {
+                showStatus('Warning: API might be offline', 'error');
+            }
+        }
+        
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const text = document.getElementById('text').value;
+            const language = document.getElementById('language').value;
+            
+            // Hide audio player
+            audioPlayer.classList.remove('show');
+            
+            // Show loading
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="spinner"></span> Generating...';
+            showStatus('Generating speech... Please wait', 'loading');
+            
+            try {
+                const response = await fetch(`${API_URL}/tts`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ text, language })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                
+                // Decode Base44 to audio
+                const audioBase44 = data.audio;
+                const audioBytes = Base44.decode(audioBase44);
+                const audioBlob = new Blob([audioBytes], { type: 'audio/mpeg' });
+                const audioUrl = URL.createObjectURL(audioBlob);
+                
+                // Display audio
+                audio.src = audioUrl;
+                audioPlayer.classList.add('show');
+                
+                // Show info
+                const compressionRatio = (audioBytes.length / audioBase44.length).toFixed(2);
+                audioInfo.innerHTML = `
+                    <strong>Text:</strong> ${text.substring(0, 50)}${text.length > 50 ? '...' : ''}<br>
+                    <strong>Language:</strong> ${language}<br>
+                    <strong>Audio size:</strong> ${audioBytes.length} bytes<br>
+                    <strong>Base44 size:</strong> ${audioBase44.length} chars<br>
+                    <strong>Compression:</strong> ${compressionRatio}x
+                `;
+                
+                showStatus('✅ Speech generated successfully!', 'success');
+                
+                // Auto play
+                audio.play().catch(e => console.log('Auto-play prevented:', e));
+                
+            } catch (error) {
+                console.error('Error:', error);
+                showStatus(`❌ Error: ${error.message}`, 'error');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '🎵 Generate Speech';
+            }
+        });
+        
+        function showStatus(message, type) {
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+        }
+        
+        function hideStatus() {
+            statusDiv.className = 'status hidden';
+        }
+    </script>
 </body>
 </html>
