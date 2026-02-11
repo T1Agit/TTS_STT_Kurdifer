@@ -134,21 +134,13 @@ pip install -r requirements.txt
 
 **Dependencies include:**
 - `gTTS` - Google Text-to-Speech (for English, German, French, Turkish)
-- `coqui-tts` - XTTS v2 model (for Kurdish with high-quality voice synthesis)
-- `torch>=2.0.0,<2.5.0` - PyTorch deep learning framework (required by XTTS v2)
-- `torchaudio>=2.0.0,<2.5.0` - Audio processing library (required by XTTS v2)
-- `transformers>=4.33.0,<5.0.0` - Hugging Face transformers (required by XTTS v2)
+- `coqui-tts>=0.27.0` - XTTS v2 model (for Kurdish with high-quality voice synthesis)
+- `librosa>=0.11.0` - Audio processing library (for training and voice cloning)
 - `flask` + `flask-cors` - API server
 - `pydub` - Audio processing
 - Other utilities
 
-**Version Constraints Rationale:**
-- **PyTorch & torchaudio 2.0.0-2.5.0**: XTTS v2 requires PyTorch 2.x for optimal performance. Version 2.5.0+ may introduce breaking changes.
-  - **Security Note**: Use torch>=2.2.0 for security patches. The constraint allows 2.0.0+ for compatibility but 2.2.0+ is recommended.
-- **transformers 4.33.0-5.0.0**: XTTS v2 depends on Hugging Face transformers 4.33+. Version 5.0.0+ has incompatible API changes.
-  - **Security Note**: Use transformers>=4.48.0 for security patches. The constraint allows 4.33.0+ for compatibility but 4.48.0+ is recommended.
-- These constraints prevent installation and runtime failures with Coqui TTS XTTS v2 model.
-- Pip will automatically install the latest compatible versions within these constraints, which include important security fixes.
+**Note:** `coqui-tts` will automatically install compatible versions of PyTorch, torchaudio, and transformers. The version constraints have been removed to avoid dependency conflicts and let coqui-tts manage its own dependencies.
 
 #### 3. Install Node.js Dependencies (Optional - for Node.js API)
 ```bash
@@ -163,25 +155,29 @@ npm install
 python setup_kurdish_tts.py
 ```
 
+**What this does:**
+- ✅ Checks if Coqui TTS is installed
+- ✅ Checks for fine-tuned Kurdish model
+- ✅ Downloads base XTTS v2 model (~2GB) if needed
+- ✅ Provides training instructions if no fine-tuned model found
+- ✅ Configures voice cloning fallback (works immediately)
+- ⏱️ Takes 2-5 minutes for initial download
+
+**Two modes available:**
+1. **Voice Cloning Fallback** (default, works immediately)
+   - Uses Turkish phonetics as proxy for Kurdish
+   - Good quality, no training required
+   
+2. **Fine-Tuned Model** (best quality, requires training)
+   - See "Training Your Own Kurdish Model" section above
+   - Run: `python train_kurdish_xtts.py`
+
 **For automated/CI installations:**
 ```bash
 # Set this environment variable to automatically accept Coqui TOS
 export COQUI_TOS_AGREED=1
 python setup_kurdish_tts.py
 ```
-
-**What this does:**
-- ✅ Checks if Coqui TTS is installed
-- ✅ Downloads XTTS v2 multilingual model (~2GB)
-- ✅ Caches model for future use (subsequent runs are fast)
-- ✅ Tests Kurdish TTS generation
-- ⏱️ Takes 2-5 minutes depending on your internet speed
-
-**COQUI_TOS_AGREED Environment Variable:**
-- Required for automated installations in CI/CD pipelines
-- Automatically accepts Coqui AI's Terms of Service
-- Use only if you have read and agree to [Coqui AI's Terms of Service](https://coqui.ai/cpml)
-- Example: `COQUI_TOS_AGREED=1 python setup_kurdish_tts.py`
 
 **Manual verification:**
 ```bash
@@ -278,27 +274,9 @@ TTS_STT_Kurdifer/
 
 ### PyTorch and Transformers Issues
 
-**Problem:** "RuntimeError: Tensors must be CUDA and dense" or PyTorch version incompatibility
+**Problem:** Dependency conflicts during installation
 ```bash
-# Solution: Ensure PyTorch version is compatible with XTTS v2
-pip install "torch>=2.0.0,<2.5.0" "torchaudio>=2.0.0,<2.5.0"
-
-# Check your installation
-python -c "import torch; print(f'PyTorch version: {torch.__version__}')"
-```
-
-**Problem:** "ImportError: cannot import name 'PreTrainedModel'" or transformers errors
-```bash
-# Solution: Install compatible transformers version
-pip install "transformers>=4.33.0,<5.0.0"
-
-# Check your installation
-python -c "import transformers; print(f'Transformers version: {transformers.__version__}')"
-```
-
-**Problem:** Version conflicts during installation
-```bash
-# Solution: Clean install with version constraints
+# Solution: Let coqui-tts manage its dependencies
 pip uninstall torch torchaudio transformers coqui-tts -y
 pip install -r requirements.txt
 
@@ -317,6 +295,16 @@ pip install -r requirements.txt
 
 ### Kurdish TTS Issues
 
+**Problem:** "Language ku is not supported" error
+```bash
+# This is expected! The base XTTS v2 model doesn't support 'ku' directly.
+# The service automatically falls back to voice cloning with Turkish phonetics.
+# This is normal behavior and should work fine.
+
+# For better quality, train a fine-tuned model:
+python train_kurdish_xtts.py --corpus_path <path_to_common_voice>
+```
+
 **Problem:** "Coqui TTS is not installed" error
 ```bash
 # Solution: Install Coqui TTS explicitly
@@ -331,6 +319,18 @@ pip install -r requirements.txt
 # Solution: Check internet connection and disk space
 # The model is ~2GB and downloads to ~/.local/share/tts/
 # You can also download manually and place in that directory
+```
+
+**Problem:** Kurdish audio quality is not good
+```bash
+# Solution 1: Train a fine-tuned model (best quality)
+python train_kurdish_xtts.py --corpus_path <corpus_path>
+
+# Solution 2: Check that you have the latest version
+pip install --upgrade coqui-tts librosa
+
+# Solution 3: Try increasing batch size if you have more VRAM
+# Edit train_kurdish_xtts.py and increase --batch_size
 ```
 
 **Problem:** "ffmpeg not found" warning
@@ -406,14 +406,52 @@ which python3
 
 **Model:** `tts_models/multilingual/multi-dataset/xtts_v2`
 - 🎯 **High Quality**: Neural TTS with natural prosody and intonation
-- 🌐 **Multilingual**: Trained on 13+ languages including Kurdish (Kurmanji)
-- 📊 **Dataset**: Uses Mozilla Common Voice Kurdish corpus
+- 🌐 **Multilingual**: Base model trained on 13+ languages
+- 📊 **Kurdish Support**: Via fine-tuning OR voice cloning fallback
 - 🚀 **Performance**: ~1-3 seconds per sentence after initialization
 - 💾 **Model Size**: ~2GB (one-time download, then cached)
 - 🔄 **Auto-setup**: Downloads automatically on first use
 
+**Two Modes of Operation:**
+
+1. **Fine-Tuned Model (Recommended)**
+   - Train on Mozilla Common Voice Kurdish corpus
+   - Native Kurdish language support
+   - Best quality and accuracy
+   - Requires: RTX 2070+ GPU, 2-4 hours training time
+   - Run: `python train_kurdish_xtts.py`
+
+2. **Voice Cloning Fallback (Works Immediately)**
+   - Uses Turkish phonetics as proxy
+   - No training required
+   - Good quality, works out-of-the-box
+   - Automatically used if no fine-tuned model found
+
 **Dataset Reference:**  
 [Mozilla Common Voice Kurdish (Kurmanji)](https://datacollective.mozillafoundation.org/datasets/cmj8u3pbq00dtnxxbz4yoxc4i)
+
+### Training Your Own Kurdish Model
+
+If you have access to a GPU and the Kurdish Common Voice corpus:
+
+```bash
+# 1. Download Common Voice Kurdish corpus
+# https://datacollective.mozillafoundation.org/datasets/cmj8u3pbq00dtnxxbz4yoxc4i
+
+# 2. Extract to: cv-corpus-24.0-2025-12-05-kmr/
+
+# 3. Run training script
+python train_kurdish_xtts.py \
+  --corpus_path cv-corpus-24.0-2025-12-05-kmr/cv-corpus-24.0-2025-12-05/kmr/ \
+  --max_samples 5000  # Optional: limit for testing
+
+# 4. Wait for training to complete (~2-4 hours on RTX 2070)
+
+# 5. Model will be saved to: models/kurdish/
+```
+
+**For Google Colab users:**
+Open `kurdish_tts_training.ipynb` in Colab and follow the steps.
 
 ### Language Usage Examples
 
