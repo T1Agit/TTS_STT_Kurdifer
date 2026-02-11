@@ -31,11 +31,14 @@ pip install -r requirements.txt
 
 Key packages:
 - `datasets>=2.14.0` - For loading Kurdish Common Voice dataset
-- `transformers>=4.30.0` - For VITS model
+- `transformers>=4.35.0` - For VITS model
 - `torch>=2.0.0` - Deep learning framework
 - `torchaudio>=2.0.0` - Audio processing
 - `soundfile>=0.12.0` - Audio I/O (Windows-compatible)
-- `librosa>=0.11.0` - Audio resampling
+- `librosa>=0.10.0` - Audio resampling
+- `numpy` - Numerical computing
+- `scipy` - Scientific computing
+- `huggingface_hub` - HuggingFace model hub integration
 - `tqdm>=4.65.0` - Progress bars
 
 ## Quick Start
