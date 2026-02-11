@@ -21,3 +21,11 @@ tts_models/
 # Python virtual environment
 venv/
 env/
+
+# Training data and outputs
+training/wavs/
+training/checkpoints/
+training/*.csv
+processed_audio/
+models/kurdish/
+cv-corpus-*/
