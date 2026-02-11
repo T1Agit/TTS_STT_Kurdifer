@@ -4,11 +4,11 @@ gTTS==2.5.0
 pydub==0.25.1
 
 # Coqui TTS and XTTS v2 for Kurdish support
-# PyTorch/torchaudio: Tested with 2.0-2.4.1. Capped at <2.5.0 to ensure Coqui TTS 0.27.x compatibility.
-# PyTorch 2.5+ may have issues, 2.6+ has breaking changes to torch.load() API.
+# PyTorch/torchaudio: Tested with 2.0-2.4.1. Capped at <2.5.0 for Coqui TTS 0.27.x compatibility.
+# 2.5.x is untested, 2.6+ has breaking changes to torch.load() API.
 torch>=2.0.0,<2.5.0
 torchaudio>=2.0.0,<2.5.0
-# transformers: Capped at <5.0.0 due to removed APIs (isin_mps_friendly) needed by Coqui TTS 0.27.x
+# transformers: Capped at <5.0.0 due to removed APIs (e.g., isin_mps_friendly) needed by Coqui TTS 0.27.x
 transformers>=4.33.0,<5.0.0
 coqui-tts>=0.27.0,<0.28.0
 

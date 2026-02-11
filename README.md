@@ -138,9 +138,9 @@ pip install -r requirements.txt
 ```
 
 **Version Notes**:
-- `torch>=2.0.0,<2.5.0` - Tested with 2.0-2.4.1. PyTorch 2.5.0+ excluded due to potential compatibility issues with Coqui TTS 0.27.x; PyTorch 2.6+ has breaking changes to `torch.load()` API.
+- `torch>=2.0.0,<2.5.0` - Tested and verified with 2.0-2.4.1. Versions capped at <2.5.0 for compatibility with Coqui TTS 0.27.x (2.5.x untested, 2.6+ has breaking changes to `torch.load()` API).
 - `torchaudio>=2.0.0,<2.5.0` - Must match torch version for compatibility
-- `transformers>=4.33.0,<5.0.0` - Version 5.x removed APIs needed by Coqui TTS 0.27.x
+- `transformers>=4.33.0,<5.0.0` - Version 5.x removed APIs (like `isin_mps_friendly`) needed by Coqui TTS 0.27.x
 - `coqui-tts>=0.27.0,<0.28.0` - XTTS v2 multilingual model support
 
 ### 3. Setup Kurdish TTS (Optional Test)
@@ -233,9 +233,9 @@ python api_server.py
 ### Model Compatibility
 
 **Supported PyTorch Versions**:
-- ✅ PyTorch 2.0.x - 2.4.x (recommended: 2.4.1)
-- ⚠️ PyTorch 2.5.x (may work but not extensively tested)
-- ❌ PyTorch 2.6+ (has breaking changes with `torch.load()`)
+- ✅ PyTorch 2.0.x - 2.4.x (tested and recommended: 2.4.1)
+- ❌ PyTorch 2.5.x - Not supported (untested with Coqui TTS 0.27.x)
+- ❌ PyTorch 2.6+ - Not supported (breaking changes with `torch.load()`)
 
 **Version Resolution**:
 ```bash
@@ -357,11 +357,11 @@ COQUI_TOS_AGREED=1            # Auto-agree to Coqui CPML license (non-commercial
 # Check your PyTorch version
 pip list | grep torch
 
-# If PyTorch >= 2.6, downgrade to 2.4.1
+# If PyTorch >= 2.5, downgrade to 2.4.1
 pip install torch==2.4.1 torchaudio==2.4.1
 ```
 
-**Why**: PyTorch 2.6+ introduced breaking changes to `torch.load()` that may not be compatible with Coqui TTS 0.27.x.
+**Why**: PyTorch 2.5.x is untested with Coqui TTS 0.27.x. PyTorch 2.6+ has breaking changes to `torch.load()` API that are not compatible.
 
 ### Transformers Compatibility
 
