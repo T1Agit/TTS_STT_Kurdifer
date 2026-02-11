@@ -115,7 +115,11 @@ class FeedbackDataManager:
             
             # Resample if needed
             if sr != target_sr:
-                audio = librosa.resample(audio, orig_sr=sr, target_sr=target_sr)
+                audio = librosa.resample(
+                    y=audio,
+                    orig_sr=sr,
+                    target_sr=target_sr
+                )
             
             # Normalize
             audio = librosa.util.normalize(audio)

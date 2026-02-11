@@ -2,6 +2,22 @@
 
 This guide explains how to prepare data and train the MMS (Massively Multilingual Speech) TTS model for Kurdish (Kurmanji) using the Common Voice dataset.
 
+## ⚠️ Important Note About Training
+
+**VITS/MMS Training Complexity**: The `train_vits.py` script provides a framework for MMS fine-tuning, but actual VITS model training requires specialized loss computation that is not currently implemented. The MMS model uses complex adversarial training with multiple loss components (reconstruction loss, KL divergence, discriminator loss, etc.).
+
+**Current Status**:
+- ✅ `prepare_data.py` - Fully functional, prepares data correctly
+- ⚠️ `train_vits.py` - Framework provided, but requires VITS loss implementation
+- ✅ `train_feedback.py` - Fully functional for incremental updates
+
+**Recommended Approaches**:
+1. **Use official MMS training scripts** from Facebook Research
+2. **Use the existing XTTS v2 training** via `train_kurdish_xtts.py` (already in repo)
+3. **Implement custom VITS loss** if you have expertise in TTS training
+
+The data preparation script (`prepare_data.py`) works perfectly and prepares data in the correct format that can be used with official training implementations.
+
 ## 🎯 Overview
 
 The training pipeline consists of three main scripts:

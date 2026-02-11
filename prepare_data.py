@@ -182,7 +182,7 @@ class KurdishDataPreparation:
         # Resample if needed
         if sample_rate != target_sr:
             audio_data = librosa.resample(
-                audio_data,
+                y=audio_data,
                 orig_sr=sample_rate,
                 target_sr=target_sr
             )

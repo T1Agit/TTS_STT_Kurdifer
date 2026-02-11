@@ -337,7 +337,19 @@ class MMSFineTuner:
                         
                         # Compute loss (simplified - actual MMS uses multiple loss components)
                         # You may need to implement custom loss based on MMS training requirements
-                        loss = outputs.loss if hasattr(outputs, 'loss') else torch.tensor(0.0)
+                        if hasattr(outputs, 'loss') and outputs.loss is not None:
+                            loss = outputs.loss
+                        else:
+                            # VITS/MMS training requires specialized loss computation
+                            # This is a placeholder - implement actual VITS loss or use specialized trainer
+                            print("\n⚠️  Warning: Model output does not include loss.")
+                            print("   MMS/VITS training requires specialized loss computation.")
+                            print("   Consider using the official MMS training scripts or implementing VITS loss.")
+                            raise NotImplementedError(
+                                "Model does not provide built-in loss. "
+                                "MMS/VITS training requires custom loss implementation. "
+                                "Please refer to the official MMS training documentation."
+                            )
                         
                         # Backward pass
                         accelerator.backward(loss)
