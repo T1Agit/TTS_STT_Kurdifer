@@ -149,13 +149,20 @@ pip install -r requirements.txt
 Test the XTTS v2 model installation:
 
 ```bash
+# Set environment variable to agree to non-commercial license
+export COQUI_TOS_AGREED=1
+
+# Run setup script
 python setup_kurdish_tts.py
 ```
 
 This will:
 - Download XTTS v2 model (~2GB, first time only)
+- Prompt for license agreement (or skip with COQUI_TOS_AGREED=1)
 - Test Kurdish TTS with sample phrase
 - Verify model is working correctly
+
+**License Note**: XTTS v2 uses [Coqui Public Model License (CPML)](https://coqui.ai/cpml) for non-commercial use. Commercial use requires contacting licensing@coqui.ai.
 
 ### 4. Run Server
 ```bash
@@ -332,9 +339,85 @@ Base44 is a custom encoding scheme that:
 ## 🔧 Environment Variables
 
 ```bash
-PORT=8080                    # Server port
-FLASK_ENV=production         # Flask environment
-MAX_TEXT_LENGTH=500          # Max characters per request
+PORT=8080                     # Server port
+FLASK_ENV=production          # Flask environment
+MAX_TEXT_LENGTH=500           # Max characters per request
+COQUI_TOS_AGREED=1            # Auto-agree to Coqui CPML license (non-commercial)
+```
+
+---
+
+## 🔧 Troubleshooting
+
+### PyTorch Version Issues
+
+**Problem**: Import errors or model loading failures
+
+**Solution**:
+```bash
+# Check your PyTorch version
+pip list | grep torch
+
+# If PyTorch >= 2.6, downgrade to 2.4.1
+pip install torch==2.4.1 torchaudio==2.4.1
+```
+
+**Why**: PyTorch 2.6+ introduced breaking changes to `torch.load()` that may not be compatible with Coqui TTS 0.27.x.
+
+### Transformers Compatibility
+
+**Problem**: `ImportError: cannot import name 'isin_mps_friendly'`
+
+**Solution**:
+```bash
+# Downgrade transformers to 4.x
+pip install 'transformers>=4.33.0,<5.0.0'
+```
+
+**Why**: Coqui TTS 0.27.x requires transformers 4.x. Version 5.x removed some APIs.
+
+### License Agreement Prompt
+
+**Problem**: Model download prompts for license agreement
+
+**Solution**:
+```bash
+# Set environment variable to auto-agree (non-commercial use)
+export COQUI_TOS_AGREED=1
+
+# Then run your script
+python setup_kurdish_tts.py
+```
+
+**Note**: This agrees to the non-commercial [Coqui CPML license](https://coqui.ai/cpml). For commercial use, contact licensing@coqui.ai.
+
+### Model Download Failures
+
+**Problem**: Network errors during model download
+
+**Solution**:
+1. Check internet connection
+2. Ensure firewall allows access to huggingface.co
+3. Verify ~2GB free disk space
+4. Retry after some time if servers are busy
+
+**Cache Location**:
+- Linux/Mac: `~/.local/share/tts/`
+- Windows: `%USERPROFILE%\.local\share\tts\`
+
+### Missing Dependencies
+
+**Problem**: `ImportError: No module named 'torch'` or similar
+
+**Solution**:
+```bash
+# Reinstall all dependencies
+pip install -r requirements.txt
+
+# If issues persist, use a clean virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
 ```
 
 ---

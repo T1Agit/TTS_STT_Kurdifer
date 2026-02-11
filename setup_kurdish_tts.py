@@ -45,7 +45,21 @@ def setup_kurdish_model():
         print("\n🔧 Setting up Kurdish TTS model...")
         print("   Model: tts_models/multilingual/multi-dataset/xtts_v2")
         print("   Language: Kurdish (Kurmanji)")
-        print("\n⏳ This may take a few minutes for first-time setup (~2GB download)...\n")
+        
+        print("\n📄 License Information:")
+        print("   XTTS v2 is available under Coqui Public Model License (CPML)")
+        print("   Non-commercial use: https://coqui.ai/cpml")
+        print("   Commercial use: Contact licensing@coqui.ai")
+        
+        print("\n⏳ This may take a few minutes for first-time setup (~2GB download)...")
+        print("   Note: First-time setup will prompt for license agreement.\n")
+        
+        # Set environment variable to auto-agree for non-commercial use
+        # Users can set COQUI_TOS_AGREED=1 to skip the prompt
+        import os
+        if not os.environ.get('COQUI_TOS_AGREED'):
+            print("💡 Tip: Set COQUI_TOS_AGREED=1 environment variable to skip license prompt.")
+            print()
         
         # Initialize TTS with the multilingual model
         # This will download the model if it's not already cached

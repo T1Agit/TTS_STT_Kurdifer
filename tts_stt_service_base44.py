@@ -76,14 +76,22 @@ class TTSSTTServiceBase44:
         """
         try:
             from TTS.api import TTS
+            import os
             
             # Lazy initialization of Coqui TTS
             if self._coqui_tts is None:
                 print("🔧 Initializing Coqui TTS for Kurdish...")
-                # Use a multilingual model that supports Kurdish
+                print("   Model: XTTS v2 (multilingual)")
+                
                 # Note: First-time initialization will download ~2GB of model data
                 # and may take 2-5 minutes depending on network speed.
+                # It will also prompt for license agreement unless COQUI_TOS_AGREED=1
                 # Subsequent calls will use cached model and be much faster.
+                
+                if not os.environ.get('COQUI_TOS_AGREED'):
+                    print("   Note: First-time setup will prompt for Coqui CPML license agreement")
+                    print("   Set COQUI_TOS_AGREED=1 to skip prompt")
+                
                 self._coqui_tts = TTS(
                     model_name="tts_models/multilingual/multi-dataset/xtts_v2",
                     progress_bar=False
