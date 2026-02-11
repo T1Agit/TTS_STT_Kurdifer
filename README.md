@@ -162,12 +162,12 @@ python setup_kurdish_tts.py
 **Manual verification:**
 ```bash
 # Test Kurdish TTS directly
-python3 -c "
+python3 << 'EOF'
 from tts_stt_service_base44 import TTSSTTServiceBase44
 service = TTSSTTServiceBase44()
 result = service.text_to_speech_base44('Silav, tu çawa yî?', 'kurdish')
-print(f'✅ Generated {result[\"size\"]} bytes of Kurdish audio')
-"
+print(f'✅ Generated {result["size"]} bytes of Kurdish audio')
+EOF
 ```
 
 #### 5. Run Python API Server

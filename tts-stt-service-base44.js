@@ -53,18 +53,6 @@ class TTSSTTServiceBase44 {
     }
 
     /**
-     * Check if we should use Python for TTS generation
-     * @private
-     * @param {string} langCode - Language code
-     * @returns {boolean} True if we should use Python
-     */
-    _shouldUsePython(langCode) {
-        // Use Python for all languages for consistency and security
-        // Python's gTTS and Coqui TTS are both available and secure
-        return true;
-    }
-
-    /**
      * Generate speech using Python service (for Coqui TTS/Kurdish)
      * @private
      * @param {string} text - Text to convert
@@ -189,8 +177,10 @@ except Exception as e:
             
             console.log(`🎤 Generating speech: '${text.substring(0, 50)}...' in ${langCode}`);
             
-            // Use Python service for all languages (more secure and consistent)
-            // Python's gTTS handles non-Kurdish languages, Coqui TTS handles Kurdish
+            // All languages use Python backend for consistency and security
+            // - Kurdish (ku): Uses Coqui TTS XTTS v2
+            // - Others (en, de, fr, tr): Use gTTS
+            // This approach eliminates the need for vulnerable node-gtts package
             const audioBuffer = await this._generateSpeechPython(text, langCode);
             
             // Encode to Base44
