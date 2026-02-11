@@ -138,11 +138,10 @@ pip install -r requirements.txt
 ```
 
 **Version Notes**:
-- `torch>=2.0.0,<2.5.0` (tested with 2.0-2.4.1)
-- `torchaudio>=2.0.0,<2.5.0` (matches torch version)
-- `coqui-tts>=0.27.0,<0.28.0` (XTTS v2 support)
-
-**Note**: PyTorch 2.6+ changes `torch.load()` behavior. If you encounter issues with PyTorch 2.6+, use version 2.4.1 or lower.
+- `torch>=2.0.0,<2.5.0` - Tested with 2.0-2.4.1. PyTorch 2.5.0+ excluded due to potential compatibility issues with Coqui TTS 0.27.x; PyTorch 2.6+ has breaking changes to `torch.load()` API.
+- `torchaudio>=2.0.0,<2.5.0` - Must match torch version for compatibility
+- `transformers>=4.33.0,<5.0.0` - Version 5.x removed APIs needed by Coqui TTS 0.27.x
+- `coqui-tts>=0.27.0,<0.28.0` - XTTS v2 multilingual model support
 
 ### 3. Setup Kurdish TTS (Optional Test)
 
