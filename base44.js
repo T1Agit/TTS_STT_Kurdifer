@@ -49,10 +49,14 @@ const Base44 = {
     },
 
     /**
-     * Decode Base44 string to Uint8Array
+     * Decode Base44 string to Uint8Array (Browser) or Buffer (Node.js)
      */
     decode(encoded) {
         if (!encoded || encoded.length === 0) {
+            // Return Buffer in Node.js, Uint8Array in browser
+            if (typeof Buffer !== 'undefined') {
+                return Buffer.alloc(0);
+            }
             return new Uint8Array(0);
         }
 
@@ -79,6 +83,10 @@ const Base44 = {
 
         // Convert BigInt to bytes
         if (num === 0n) {
+            // Return Buffer in Node.js, Uint8Array in browser
+            if (typeof Buffer !== 'undefined') {
+                return Buffer.alloc(Math.max(leadingZeros, 1));
+            }
             return new Uint8Array(Math.max(leadingZeros, 1));
         }
 
@@ -90,12 +98,34 @@ const Base44 = {
             tempNum = tempNum >> 8n;
         }
 
-        // Create Uint8Array with leading zeros
-        const result = new Uint8Array(leadingZeros + bytes.length);
-        for (let i = 0; i < bytes.length; i++) {
-            result[leadingZeros + i] = bytes[i];
+        // Return Buffer in Node.js, Uint8Array in browser
+        if (typeof Buffer !== 'undefined') {
+            const result = Buffer.alloc(leadingZeros + bytes.length);
+            for (let i = 0; i < bytes.length; i++) {
+                result[leadingZeros + i] = bytes[i];
+            }
+            return result;
+        } else {
+            // Create Uint8Array with leading zeros
+            const result = new Uint8Array(leadingZeros + bytes.length);
+            for (let i = 0; i < bytes.length; i++) {
+                result[leadingZeros + i] = bytes[i];
+            }
+            return result;
         }
-
-        return result;
     }
 };
+
+// Node.js exports
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        encode: Base44.encode.bind(Base44),
+        decode: Base44.decode.bind(Base44),
+        Base44
+    };
+}
+
+// Browser global export
+if (typeof window !== 'undefined') {
+    window.Base44 = Base44;
+}
