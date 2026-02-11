@@ -86,9 +86,8 @@ class TTSSTTServiceBase44:
         """
         Generate speech using Coqui TTS for Kurdish
         
-        Supports two modes:
-        1. Fine-tuned model: If models/kurdish/ exists, use it with language="ku"
-        2. Voice cloning fallback: Use base XTTS v2 with Turkish phonetics + speaker_wav
+        Uses voice cloning fallback with Turkish phonetics as proxy for Kurdish.
+        XTTS v2 base model doesn't support 'ku' language code directly.
         
         Args:
             text: Text to convert to speech
@@ -106,64 +105,26 @@ class TTSSTTServiceBase44:
                 
                 # Check if we have a fine-tuned model
                 if self._fine_tuned_model_path:
-                    print(f"   Using fine-tuned Kurdish model from: {self._fine_tuned_model_path}")
-                    # Load fine-tuned model
-                    # Note: You would load the custom model here
-                    # For now, we'll use the base model as fallback
-                    self._coqui_tts = TTS(
-                        model_name="tts_models/multilingual/multi-dataset/xtts_v2",
-                        progress_bar=False
-                    )
-                else:
-                    print("   ⚠️  No fine-tuned model found. Using voice cloning fallback.")
-                    print("   Tip: Run 'python train_kurdish_xtts.py' to train a Kurdish model.")
-                    # Use base multilingual model
-                    self._coqui_tts = TTS(
-                        model_name="tts_models/multilingual/multi-dataset/xtts_v2",
-                        progress_bar=False
-                    )
-                
-                print("✅ Coqui TTS initialized")
+                    print(f"   ⚠️  Fine-tuned model detected at: {self._fine_tuned_model_path}")
+                    print("   ⚠️  Fine-tuned model loading not yet implemented")
+                    print("   ℹ️  Falling back to voice cloning with Turkish phonetics")
+                    # TODO: Implement loading of fine-tuned model when available
+                    # For now, use base model with voice cloning fallback
+                    
+                # Use base multilingual model with voice cloning
+                self._coqui_tts = TTS(
+                    model_name="tts_models/multilingual/multi-dataset/xtts_v2",
+                    progress_bar=False
+                )
+                print("✅ Coqui TTS initialized (voice cloning mode)")
             
             # Generate speech to temporary file
             with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp_file:
                 temp_path = tmp_file.name
             
-            # Generate audio
-            if self._fine_tuned_model_path:
-                # Use fine-tuned model with proper Kurdish language support
-                # For now, this is a placeholder - actual implementation would load custom model
-                print("   Using fine-tuned Kurdish model...")
-                try:
-                    self._coqui_tts.tts_to_file(
-                        text=text,
-                        file_path=temp_path,
-                        language="ku"  # This will fail on base model
-                    )
-                except Exception as e:
-                    # If fine-tuned model fails, fall back to voice cloning
-                    print(f"   ⚠️  Fine-tuned model error: {e}")
-                    print("   Falling back to voice cloning...")
-                    self._generate_with_voice_cloning(text, temp_path)
-            else:
-                # Use voice cloning fallback (Turkish phonetics as proxy)
-                print("   Using voice cloning with Turkish phonetics...")
-                self._generate_with_voice_cloning(text, temp_path)
-            
-            # Read the generated file with librosa (more reliable than torchaudio)
-            try:
-                import librosa
-                import soundfile as sf
-                
-                # Load with librosa
-                audio, sr = librosa.load(temp_path, sr=None)
-                
-                # Save back to temp file if needed
-                sf.write(temp_path, audio, sr)
-                
-            except ImportError:
-                # librosa not available, use the file as-is
-                pass
+            # Generate audio using voice cloning with Turkish as phonetic proxy
+            print("   Using Turkish phonetics as proxy for Kurdish...")
+            self._generate_with_voice_cloning(text, temp_path)
             
             # Read the generated file
             with open(temp_path, 'rb') as f:
@@ -190,25 +151,15 @@ class TTSSTTServiceBase44:
     
     def _generate_with_voice_cloning(self, text: str, output_path: str):
         """
-        Generate speech using voice cloning with Turkish as phonetic proxy
+        Generate speech using Turkish as phonetic proxy for Kurdish
         
         Args:
             text: Kurdish text to synthesize
             output_path: Path to save WAV file
         """
-        # For voice cloning, we need a reference audio file
-        # You can either:
-        # 1. Provide a Kurdish speaker sample
-        # 2. Use Turkish as a close phonetic match (Kurmanji and Turkish share sounds)
-        
-        # This is a simplified implementation
-        # In production, you would:
-        # 1. Have a reference Kurdish audio sample in your repository
-        # 2. Use that as speaker_wav parameter
-        
+        # Use Turkish language with XTTS v2 as phonetic proxy
+        # Turkish and Kurdish (Kurmanji) share similar phonology
         try:
-            # Use Turkish language with XTTS v2 as phonetic proxy
-            # Turkish and Kurdish (Kurmanji) share similar phonology
             self._coqui_tts.tts_to_file(
                 text=text,
                 file_path=output_path,

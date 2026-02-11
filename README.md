@@ -298,11 +298,17 @@ pip install -r requirements.txt
 **Problem:** "Language ku is not supported" error
 ```bash
 # This is expected! The base XTTS v2 model doesn't support 'ku' directly.
-# The service automatically falls back to voice cloning with Turkish phonetics.
-# This is normal behavior and should work fine.
+# The service automatically uses voice cloning with Turkish phonetics.
+# This is the normal and recommended behavior - no action needed.
+```
 
-# For better quality, train a fine-tuned model:
+**Problem:** Want to prepare training data for future fine-tuning
+```bash
+# Download Common Voice corpus and run:
 python train_kurdish_xtts.py --corpus_path <path_to_common_voice>
+
+# Note: This prepares data but doesn't perform actual training yet.
+# Voice cloning is currently the recommended approach.
 ```
 
 **Problem:** "Coqui TTS is not installed" error
@@ -323,14 +329,17 @@ pip install -r requirements.txt
 
 **Problem:** Kurdish audio quality is not good
 ```bash
-# Solution 1: Train a fine-tuned model (best quality)
-python train_kurdish_xtts.py --corpus_path <corpus_path>
+# The voice cloning with Turkish phonetics should provide good quality.
+# If you experience issues:
 
-# Solution 2: Check that you have the latest version
-pip install --upgrade coqui-tts librosa
+# 1. Check that you have the latest version
+pip install --upgrade coqui-tts
 
-# Solution 3: Try increasing batch size if you have more VRAM
-# Edit train_kurdish_xtts.py and increase --batch_size
+# 2. Verify the text is in Kurdish (Kurmanji) script
+# The system works best with proper Kurdish text
+
+# 3. Try shorter sentences (under 200 characters)
+# Longer texts may have quality issues
 ```
 
 **Problem:** "ffmpeg not found" warning
@@ -414,25 +423,24 @@ which python3
 
 **Two Modes of Operation:**
 
-1. **Fine-Tuned Model (Recommended)**
-   - Train on Mozilla Common Voice Kurdish corpus
-   - Native Kurdish language support
-   - Best quality and accuracy
-   - Requires: RTX 2070+ GPU, 2-4 hours training time
-   - Run: `python train_kurdish_xtts.py`
-
-2. **Voice Cloning Fallback (Works Immediately)**
-   - Uses Turkish phonetics as proxy
+1. **Voice Cloning Fallback (Recommended - Works Immediately)**
+   - Uses Turkish phonetics as proxy for Kurdish
    - No training required
    - Good quality, works out-of-the-box
-   - Automatically used if no fine-tuned model found
+   - Automatically used (default mode)
+
+2. **Fine-Tuned Model (Future Enhancement)**
+   - Data preparation script available (`train_kurdish_xtts.py`)
+   - Prepares Mozilla Common Voice data for fine-tuning
+   - Actual fine-tuning implementation pending
+   - Voice cloning is currently the recommended approach
 
 **Dataset Reference:**  
 [Mozilla Common Voice Kurdish (Kurmanji)](https://datacollective.mozillafoundation.org/datasets/cmj8u3pbq00dtnxxbz4yoxc4i)
 
-### Training Your Own Kurdish Model
+### Preparing Data for Future Fine-Tuning
 
-If you have access to a GPU and the Kurdish Common Voice corpus:
+If you want to prepare training data from the Kurdish Common Voice corpus:
 
 ```bash
 # 1. Download Common Voice Kurdish corpus
@@ -440,18 +448,19 @@ If you have access to a GPU and the Kurdish Common Voice corpus:
 
 # 2. Extract to: cv-corpus-24.0-2025-12-05-kmr/
 
-# 3. Run training script
+# 3. Run data preparation script
 python train_kurdish_xtts.py \
   --corpus_path cv-corpus-24.0-2025-12-05-kmr/cv-corpus-24.0-2025-12-05/kmr/ \
   --max_samples 5000  # Optional: limit for testing
 
-# 4. Wait for training to complete (~2-4 hours on RTX 2070)
-
-# 5. Model will be saved to: models/kurdish/
+# 4. Script will process and validate audio files
+# 5. Training data manifest saved to: models/kurdish/training_manifest.json
 ```
 
+**Note:** The script prepares data but doesn't perform actual fine-tuning yet. Voice cloning with Turkish phonetics is the current recommended approach.
+
 **For Google Colab users:**
-Open `kurdish_tts_training.ipynb` in Colab and follow the steps.
+Open `kurdish_tts_training.ipynb` in Colab for GPU-accelerated data preparation.
 
 ### Language Usage Examples
 

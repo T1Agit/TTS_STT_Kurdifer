@@ -288,22 +288,28 @@ class XTTSv2Trainer:
         checkpoint_interval: int = 2
     ):
         """
-        Fine-tune XTTS v2 on Kurdish data
+        Prepare training data and save manifests
+        
+        NOTE: This method prepares data for fine-tuning but does not perform
+        actual training. For actual XTTS v2 fine-tuning, you would need to:
+        1. Use Coqui TTS official fine-tuning recipes
+        2. Or implement training using the GPT_train() method
+        3. This script validates data and creates training manifests
         
         Args:
             training_data: List of dicts with 'audio_path' and 'text'
-            epochs: Number of training epochs
-            batch_size: Batch size (keep small for 8GB VRAM)
-            learning_rate: Learning rate
-            checkpoint_interval: Save checkpoint every N epochs
+            epochs: Number of training epochs (for future use)
+            batch_size: Batch size (for future use)
+            learning_rate: Learning rate (for future use)
+            checkpoint_interval: Save checkpoint every N epochs (for future use)
         """
         print("\n" + "=" * 80)
-        print("Starting Fine-Tuning")
+        print("Data Preparation Complete")
         print("=" * 80)
         print(f"Training samples: {len(training_data)}")
-        print(f"Epochs: {epochs}")
-        print(f"Batch size: {batch_size}")
-        print(f"Learning rate: {learning_rate}")
+        print(f"Target epochs: {epochs}")
+        print(f"Target batch size: {batch_size}")
+        print(f"Target learning rate: {learning_rate}")
         
         # NOTE: XTTS v2 fine-tuning requires the TTS.tts.configs.xtts_config module
         # and specific training scripts from Coqui TTS repository.
@@ -313,12 +319,13 @@ class XTTSv2Trainer:
         # 2. Or use the trainer.GPT_train() method if available
         # 3. Configure the model for Kurdish language
         #
-        # This is a simplified implementation outline.
+        # This script prepares and validates your data as the first step.
         
-        print("\n⚠️  XTTS v2 fine-tuning requires additional setup:")
-        print("   1. This script prepares and validates your data")
-        print("   2. For actual fine-tuning, use the official Coqui TTS trainer")
-        print("   3. Or use voice cloning as a workaround (no training needed)")
+        print("\n⚠️  Important Notes:")
+        print("   • This script prepares your data for fine-tuning")
+        print("   • Actual XTTS v2 fine-tuning requires additional implementation")
+        print("   • For immediate use, the service falls back to voice cloning")
+        print("   • Voice cloning with Turkish phonetics works without training")
         
         # Save training data manifest
         manifest_path = self.output_model_dir / "training_manifest.json"
@@ -329,12 +336,13 @@ class XTTSv2Trainer:
         # Save a simple config
         config = {
             "language": "ku",
-            "model_type": "xtts_v2_finetuned",
+            "model_type": "xtts_v2_prepared",
             "base_model": self.base_model,
             "training_samples": len(training_data),
-            "epochs": epochs,
-            "batch_size": batch_size,
-            "learning_rate": learning_rate
+            "target_epochs": epochs,
+            "target_batch_size": batch_size,
+            "target_learning_rate": learning_rate,
+            "status": "data_prepared"
         }
         config_path = self.output_model_dir / "config.json"
         with open(config_path, 'w', encoding='utf-8') as f:
@@ -449,7 +457,7 @@ def main():
     
     # Step 3: Train (prepare data for training)
     print("\n" + "=" * 80)
-    print("STEP 3: Training Preparation")
+    print("STEP 3: Data Preparation")
     print("=" * 80)
     
     trainer.train(
@@ -462,7 +470,7 @@ def main():
     
     # Final summary
     print("\n" + "=" * 80)
-    print("✅ Training Pipeline Complete!")
+    print("✅ Data Preparation Complete!")
     print("=" * 80)
     print(f"\n📁 Output locations:")
     print(f"   Processed audio: {args.output_dir}/")
@@ -472,9 +480,9 @@ def main():
     
     print("\n💡 Next Steps:")
     print("   1. Review the processed audio quality")
-    print("   2. For actual fine-tuning, use Coqui TTS official training scripts")
-    print("   3. Or use voice cloning with representative Kurdish audio samples")
-    print("   4. Place the fine-tuned model in models/kurdish/ directory")
+    print("   2. Data is ready for fine-tuning (actual training not yet implemented)")
+    print("   3. For now, use voice cloning fallback (works immediately)")
+    print("   4. Voice cloning uses Turkish phonetics and requires no training")
     print("   5. Run: python tts_stt_service_base44.py to test")
     
     return 0
