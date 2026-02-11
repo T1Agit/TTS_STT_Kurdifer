@@ -8,9 +8,14 @@ This script:
 3. Resamples audio to 16kHz mono
 4. Saves WAV files to training/wavs/
 5. Creates training/metadata.csv with format: filename|text
+
+IMPORTANT: This script sets HF_AUDIO_DECODER="soundfile" at import time to work around
+torchcodec issues on Windows. This environment variable affects how the datasets library
+decodes audio files.
 """
 
 import os
+# Set audio decoder to soundfile for Windows compatibility (must be before datasets import)
 os.environ["HF_AUDIO_DECODER"] = "soundfile"
 
 import io

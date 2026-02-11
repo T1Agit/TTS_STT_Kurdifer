@@ -370,8 +370,13 @@ def main():
                 # Load base model structure first
                 tokenizer = VitsTokenizer.from_pretrained(args.base_model)
                 model = VitsModel.from_pretrained(args.base_model)
-                # Load checkpoint weights
-                checkpoint = torch.load(str(latest_checkpoint), map_location="cpu")
+                # Load checkpoint weights (weights_only=True for security)
+                try:
+                    # Try with weights_only=True (PyTorch 1.13+)
+                    checkpoint = torch.load(str(latest_checkpoint), map_location="cpu", weights_only=True)
+                except TypeError:
+                    # Fallback for older PyTorch versions
+                    checkpoint = torch.load(str(latest_checkpoint), map_location="cpu")
                 model.load_state_dict(checkpoint["model_state_dict"])
                 print(f"   Loaded checkpoint from epoch {checkpoint.get('epoch', 'unknown')}")
             else:
