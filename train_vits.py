@@ -7,6 +7,12 @@ Optimized for RTX 2070 8GB VRAM using gradient accumulation and mixed precision.
 
 Base model: facebook/mms-tts-kmr-script_latin (VITS architecture, 36M params)
 Dataset: Kurdish Common Voice prepared by prepare_data.py
+
+FIXED: VitsModel doesn't accept 'labels' parameter. We now:
+1. Generate waveform with model(input_ids)
+2. Compute mel spectrogram from generated waveform
+3. Compare with ground truth mel spectrogram
+4. Compute L1 loss manually
 """
 
 import os
@@ -281,16 +287,17 @@ def train_epoch(
     device: torch.device,
     gradient_accumulation_steps: int = 1,
     use_fp16: bool = True
-) -> float:
+) -> Tuple[float, int]:
     """
     Train for one epoch
     
     Returns:
-        Average loss for the epoch
+        Tuple of (average loss, number of errors)
     """
     model.train()
     total_loss = 0.0
     num_batches = 0
+    num_errors = 0
     
     # Create GradScaler for mixed precision
     scaler = torch.cuda.amp.GradScaler() if use_fp16 else None
@@ -301,62 +308,118 @@ def train_epoch(
     progress_bar = tqdm(dataloader, desc="Training")
     
     for batch_idx, batch in enumerate(progress_bar):
-        input_ids = batch["input_ids"].to(device)
-        attention_mask = batch["attention_mask"].to(device)
-        waveforms = batch["waveforms"].to(device)
-        
-        # Compute mel spectrograms with cached transform
-        mel_specs = []
-        for waveform in waveforms:
-            mel_spec = mel_computer.compute(waveform)
-            mel_specs.append(mel_spec)
-        
-        # Stack mel spectrograms (pad to same length)
-        max_mel_len = max(mel.shape[-1] for mel in mel_specs)
-        mel_specs_padded = []
-        for mel in mel_specs:
-            pad_len = max_mel_len - mel.shape[-1]
-            mel_padded = F.pad(mel, (0, pad_len), value=0.0)
-            mel_specs_padded.append(mel_padded)
-        mel_specs = torch.stack(mel_specs_padded).to(device)
-        
-        # Forward pass with mixed precision
-        if use_fp16:
-            with torch.cuda.amp.autocast():
+        try:
+            input_ids = batch["input_ids"].to(device)
+            attention_mask = batch["attention_mask"].to(device)
+            waveforms = batch["waveforms"].to(device)
+            
+            # Compute ground truth mel spectrograms with cached transform
+            target_mel_specs = []
+            for waveform in waveforms:
+                mel_spec = mel_computer.compute(waveform)
+                target_mel_specs.append(mel_spec)
+            
+            # Stack mel spectrograms (pad to same length)
+            max_mel_len = max(mel.shape[-1] for mel in target_mel_specs)
+            target_mel_specs_padded = []
+            for mel in target_mel_specs:
+                pad_len = max_mel_len - mel.shape[-1]
+                mel_padded = F.pad(mel, (0, pad_len), value=0.0)
+                target_mel_specs_padded.append(mel_padded)
+            target_mel_specs = torch.stack(target_mel_specs_padded).to(device)
+            
+            # Forward pass with mixed precision
+            if use_fp16:
+                with torch.cuda.amp.autocast():
+                    # Generate waveform from text
+                    outputs = model(
+                        input_ids=input_ids,
+                        attention_mask=attention_mask
+                    )
+                    
+                    # Get generated waveform
+                    if not hasattr(outputs, 'waveform'):
+                        raise ValueError("Model output does not contain 'waveform' attribute")
+                    
+                    generated_waveform = outputs.waveform
+                    
+                    # Compute mel spectrogram from generated waveform
+                    generated_mel_specs = []
+                    for waveform in generated_waveform:
+                        mel_spec = mel_computer.compute(waveform)
+                        generated_mel_specs.append(mel_spec)
+                    
+                    # Stack and pad generated mel specs
+                    max_gen_mel_len = max(mel.shape[-1] for mel in generated_mel_specs)
+                    # Align target and generated lengths
+                    common_len = min(max_mel_len, max_gen_mel_len)
+                    
+                    # Crop to common length
+                    target_mel_specs_cropped = target_mel_specs[:, :, :common_len]
+                    generated_mel_specs_cropped = torch.stack([mel[:, :common_len] for mel in generated_mel_specs])
+                    
+                    # Compute L1 loss between mel spectrograms
+                    loss = F.l1_loss(generated_mel_specs_cropped, target_mel_specs_cropped)
+                    loss = loss / gradient_accumulation_steps
+                
+                # Backward pass with gradient scaling
+                scaler.scale(loss).backward()
+            else:
+                # Generate waveform from text
                 outputs = model(
                     input_ids=input_ids,
-                    attention_mask=attention_mask,
-                    labels=mel_specs
+                    attention_mask=attention_mask
                 )
-                loss = outputs.loss / gradient_accumulation_steps
+                
+                # Get generated waveform
+                if not hasattr(outputs, 'waveform'):
+                    raise ValueError("Model output does not contain 'waveform' attribute")
+                
+                generated_waveform = outputs.waveform
+                
+                # Compute mel spectrogram from generated waveform
+                generated_mel_specs = []
+                for waveform in generated_waveform:
+                    mel_spec = mel_computer.compute(waveform)
+                    generated_mel_specs.append(mel_spec)
+                
+                # Stack and pad generated mel specs
+                max_gen_mel_len = max(mel.shape[-1] for mel in generated_mel_specs)
+                # Align target and generated lengths
+                common_len = min(max_mel_len, max_gen_mel_len)
+                
+                # Crop to common length
+                target_mel_specs_cropped = target_mel_specs[:, :, :common_len]
+                generated_mel_specs_cropped = torch.stack([mel[:, :common_len] for mel in generated_mel_specs])
+                
+                # Compute L1 loss between mel spectrograms
+                loss = F.l1_loss(generated_mel_specs_cropped, target_mel_specs_cropped)
+                loss = loss / gradient_accumulation_steps
+                loss.backward()
             
-            # Backward pass with gradient scaling
-            scaler.scale(loss).backward()
-        else:
-            outputs = model(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                labels=mel_specs
-            )
-            loss = outputs.loss / gradient_accumulation_steps
-            loss.backward()
-        
-        # Update weights after accumulation
-        if (batch_idx + 1) % gradient_accumulation_steps == 0:
-            if use_fp16:
-                scaler.step(optimizer)
-                scaler.update()
-            else:
-                optimizer.step()
-            optimizer.zero_grad()
-        
-        total_loss += loss.item() * gradient_accumulation_steps
-        num_batches += 1
-        
-        # Update progress bar
-        progress_bar.set_postfix({"loss": f"{loss.item() * gradient_accumulation_steps:.4f}"})
+            # Update weights after accumulation
+            if (batch_idx + 1) % gradient_accumulation_steps == 0:
+                if use_fp16:
+                    scaler.step(optimizer)
+                    scaler.update()
+                else:
+                    optimizer.step()
+                optimizer.zero_grad()
+            
+            total_loss += loss.item() * gradient_accumulation_steps
+            num_batches += 1
+            
+            # Update progress bar
+            progress_bar.set_postfix({"loss": f"{loss.item() * gradient_accumulation_steps:.4f}"})
+            
+        except Exception as e:
+            num_errors += 1
+            if num_errors <= 10:  # Print first 10 errors
+                print(f"\n⚠️  Error on batch {batch_idx}: {str(e)[:200]}")
+            continue
     
-    return total_loss / num_batches if num_batches > 0 else 0.0
+    avg_loss = total_loss / num_batches if num_batches > 0 else 0.0
+    return avg_loss, num_errors
 
 
 def save_checkpoint(
@@ -478,7 +541,7 @@ def main():
         print(f"\n📍 Epoch {epoch + 1}/{args.epochs}")
         
         # Train for one epoch
-        avg_loss = train_epoch(
+        avg_loss, num_errors = train_epoch(
             model=model,
             dataloader=dataloader,
             optimizer=optimizer,
@@ -488,6 +551,8 @@ def main():
         )
         
         print(f"✅ Epoch {epoch + 1} complete - Average loss: {avg_loss:.4f}")
+        if num_errors > 0:
+            print(f"⚠️  {num_errors} batches had errors and were skipped")
         
         # Save checkpoint every 2 epochs
         if (epoch + 1) % 2 == 0:

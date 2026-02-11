@@ -13,6 +13,12 @@ Expected input structure:
   - audio_002.wav
   - audio_002.txt
   - ...
+
+FIXED: VitsModel doesn't accept 'labels' parameter. We now:
+1. Generate waveform with model(input_ids)
+2. Compute mel spectrogram from generated waveform
+3. Compare with ground truth mel spectrogram
+4. Compute L1 loss manually
 """
 
 import os
@@ -261,8 +267,13 @@ def train_on_feedback(
     device: torch.device,
     epochs: int,
     use_fp16: bool = True
-):
-    """Train model on feedback data"""
+) -> Tuple[float, int]:
+    """
+    Train model on feedback data
+    
+    Returns:
+        Tuple of (final loss, total errors)
+    """
     model.train()
     scaler = torch.cuda.amp.GradScaler() if use_fp16 else None
     
@@ -271,67 +282,129 @@ def train_on_feedback(
     
     print(f"\n🚀 Training on feedback for {epochs} epochs...")
     
+    total_errors = 0
+    final_loss = 0.0
+    
     for epoch in range(epochs):
         print(f"\n📍 Epoch {epoch + 1}/{epochs}")
         total_loss = 0.0
         num_batches = 0
+        epoch_errors = 0
         
         progress_bar = tqdm(dataloader, desc=f"Epoch {epoch + 1}")
         
         for batch in progress_bar:
-            input_ids = batch["input_ids"].to(device)
-            attention_mask = batch["attention_mask"].to(device)
-            waveforms = batch["waveforms"].to(device)
-            
-            # Compute mel spectrograms with cached transform
-            mel_specs = []
-            for waveform in waveforms:
-                mel_spec = mel_computer.compute(waveform)
-                mel_specs.append(mel_spec)
-            
-            # Stack mel spectrograms (pad to same length)
-            max_mel_len = max(mel.shape[-1] for mel in mel_specs)
-            mel_specs_padded = []
-            for mel in mel_specs:
-                pad_len = max_mel_len - mel.shape[-1]
-                mel_padded = F.pad(mel, (0, pad_len), value=0.0)
-                mel_specs_padded.append(mel_padded)
-            mel_specs = torch.stack(mel_specs_padded).to(device)
-            
-            # Forward pass
-            if use_fp16:
-                with torch.cuda.amp.autocast():
+            try:
+                input_ids = batch["input_ids"].to(device)
+                attention_mask = batch["attention_mask"].to(device)
+                waveforms = batch["waveforms"].to(device)
+                
+                # Compute ground truth mel spectrograms with cached transform
+                target_mel_specs = []
+                for waveform in waveforms:
+                    mel_spec = mel_computer.compute(waveform)
+                    target_mel_specs.append(mel_spec)
+                
+                # Stack mel spectrograms (pad to same length)
+                max_mel_len = max(mel.shape[-1] for mel in target_mel_specs)
+                target_mel_specs_padded = []
+                for mel in target_mel_specs:
+                    pad_len = max_mel_len - mel.shape[-1]
+                    mel_padded = F.pad(mel, (0, pad_len), value=0.0)
+                    target_mel_specs_padded.append(mel_padded)
+                target_mel_specs = torch.stack(target_mel_specs_padded).to(device)
+                
+                # Forward pass
+                if use_fp16:
+                    with torch.cuda.amp.autocast():
+                        # Generate waveform from text
+                        outputs = model(
+                            input_ids=input_ids,
+                            attention_mask=attention_mask
+                        )
+                        
+                        # Get generated waveform
+                        if not hasattr(outputs, 'waveform'):
+                            raise ValueError("Model output does not contain 'waveform' attribute")
+                        
+                        generated_waveform = outputs.waveform
+                        
+                        # Compute mel spectrogram from generated waveform
+                        generated_mel_specs = []
+                        for waveform in generated_waveform:
+                            mel_spec = mel_computer.compute(waveform)
+                            generated_mel_specs.append(mel_spec)
+                        
+                        # Stack and pad generated mel specs
+                        max_gen_mel_len = max(mel.shape[-1] for mel in generated_mel_specs)
+                        # Align target and generated lengths
+                        common_len = min(max_mel_len, max_gen_mel_len)
+                        
+                        # Crop to common length
+                        target_mel_specs_cropped = target_mel_specs[:, :, :common_len]
+                        generated_mel_specs_cropped = torch.stack([mel[:, :common_len] for mel in generated_mel_specs])
+                        
+                        # Compute L1 loss between mel spectrograms
+                        loss = F.l1_loss(generated_mel_specs_cropped, target_mel_specs_cropped)
+                    
+                    scaler.scale(loss).backward()
+                    scaler.step(optimizer)
+                    scaler.update()
+                else:
+                    # Generate waveform from text
                     outputs = model(
                         input_ids=input_ids,
-                        attention_mask=attention_mask,
-                        labels=mel_specs
+                        attention_mask=attention_mask
                     )
-                    loss = outputs.loss
+                    
+                    # Get generated waveform
+                    if not hasattr(outputs, 'waveform'):
+                        raise ValueError("Model output does not contain 'waveform' attribute")
+                    
+                    generated_waveform = outputs.waveform
+                    
+                    # Compute mel spectrogram from generated waveform
+                    generated_mel_specs = []
+                    for waveform in generated_waveform:
+                        mel_spec = mel_computer.compute(waveform)
+                        generated_mel_specs.append(mel_spec)
+                    
+                    # Stack and pad generated mel specs
+                    max_gen_mel_len = max(mel.shape[-1] for mel in generated_mel_specs)
+                    # Align target and generated lengths
+                    common_len = min(max_mel_len, max_gen_mel_len)
+                    
+                    # Crop to common length
+                    target_mel_specs_cropped = target_mel_specs[:, :, :common_len]
+                    generated_mel_specs_cropped = torch.stack([mel[:, :common_len] for mel in generated_mel_specs])
+                    
+                    # Compute L1 loss between mel spectrograms
+                    loss = F.l1_loss(generated_mel_specs_cropped, target_mel_specs_cropped)
+                    loss.backward()
+                    optimizer.step()
                 
-                scaler.scale(loss).backward()
-                scaler.step(optimizer)
-                scaler.update()
-            else:
-                outputs = model(
-                    input_ids=input_ids,
-                    attention_mask=attention_mask,
-                    labels=mel_specs
-                )
-                loss = outputs.loss
-                loss.backward()
-                optimizer.step()
-            
-            optimizer.zero_grad()
-            
-            total_loss += loss.item()
-            num_batches += 1
-            
-            progress_bar.set_postfix({"loss": f"{loss.item():.4f}"})
+                optimizer.zero_grad()
+                
+                total_loss += loss.item()
+                num_batches += 1
+                final_loss = loss.item()
+                
+                progress_bar.set_postfix({"loss": f"{loss.item():.4f}"})
+                
+            except Exception as e:
+                epoch_errors += 1
+                total_errors += 1
+                if total_errors <= 10:  # Print first 10 errors
+                    print(f"\n⚠️  Error in batch: {str(e)[:200]}")
+                continue
         
         avg_loss = total_loss / num_batches if num_batches > 0 else 0.0
         print(f"✅ Epoch {epoch + 1} complete - Average loss: {avg_loss:.4f}")
+        if epoch_errors > 0:
+            print(f"⚠️  {epoch_errors} batches had errors and were skipped")
+        final_loss = avg_loss
     
-    return avg_loss
+    return final_loss, total_errors
 
 
 def main():
@@ -406,7 +479,7 @@ def main():
     )
     
     # Train on feedback
-    final_loss = train_on_feedback(
+    final_loss, total_errors = train_on_feedback(
         model=model,
         dataloader=dataloader,
         optimizer=optimizer,
@@ -433,6 +506,8 @@ def main():
     print(f"\nUpdated model saved to: {output_dir}")
     print(f"Samples processed: {len(dataset)}")
     print(f"Final loss: {final_loss:.4f}")
+    if total_errors > 0:
+        print(f"⚠️  Total errors during training: {total_errors}")
     print("\n💡 To continue collecting feedback:")
     print(f"   1. Add more WAV+TXT pairs to {args.feedback_dir}")
     print(f"   2. Run this script again")
