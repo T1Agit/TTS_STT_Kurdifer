@@ -20,6 +20,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 import torchaudio
+import torchaudio.transforms as T
+import soundfile as sf
 from transformers import VitsModel, VitsTokenizer, VitsConfig
 import numpy as np
 from tqdm import tqdm
@@ -147,17 +149,21 @@ class KurdishTTSDataset(Dataset):
         """Get a single sample"""
         wav_path, text = self.samples[idx]
         
-        # Load audio
-        waveform, sample_rate = torchaudio.load(str(wav_path))
+        # Load audio with soundfile (NOT torchaudio - it requires torchcodec)
+        audio_data, sample_rate = sf.read(str(wav_path))
+        waveform = torch.from_numpy(audio_data).float()
         
-        # Ensure mono
-        if waveform.shape[0] > 1:
-            waveform = waveform.mean(dim=0, keepdim=True)
+        # Ensure correct shape [channels, samples]
+        if waveform.dim() == 1:
+            waveform = waveform.unsqueeze(0)
+        elif waveform.dim() == 2:
+            # If stereo, convert to mono
+            waveform = waveform.mean(dim=1, keepdim=True)
         
         # Resample to 16kHz if needed (with caching)
         if sample_rate != 16000:
             if sample_rate not in self.resampler_cache:
-                self.resampler_cache[sample_rate] = torchaudio.transforms.Resample(sample_rate, 16000)
+                self.resampler_cache[sample_rate] = T.Resample(sample_rate, 16000)
             waveform = self.resampler_cache[sample_rate](waveform)
         
         # Tokenize text
@@ -192,7 +198,7 @@ def compute_mel_spectrogram(
     """
     # Note: This function should be called with a pre-initialized transform
     # for better performance during training
-    mel_transform = torchaudio.transforms.MelSpectrogram(
+    mel_transform = T.MelSpectrogram(
         sample_rate=sample_rate,
         n_fft=n_fft,
         hop_length=hop_length,
@@ -218,7 +224,7 @@ class MelSpectrogramComputer:
         n_mels: int = 80,
         device: torch.device = None
     ):
-        self.mel_transform = torchaudio.transforms.MelSpectrogram(
+        self.mel_transform = T.MelSpectrogram(
             sample_rate=sample_rate,
             n_fft=n_fft,
             hop_length=hop_length,
@@ -291,6 +297,7 @@ def train_epoch(
     model.train()
     total_loss = 0.0
     num_batches = 0
+    error_count = 0
     
     # Create GradScaler for mixed precision
     scaler = torch.cuda.amp.GradScaler() if use_fp16 else None
@@ -301,60 +308,70 @@ def train_epoch(
     progress_bar = tqdm(dataloader, desc="Training")
     
     for batch_idx, batch in enumerate(progress_bar):
-        input_ids = batch["input_ids"].to(device)
-        attention_mask = batch["attention_mask"].to(device)
-        waveforms = batch["waveforms"].to(device)
-        
-        # Compute mel spectrograms with cached transform
-        mel_specs = []
-        for waveform in waveforms:
-            mel_spec = mel_computer.compute(waveform)
-            mel_specs.append(mel_spec)
-        
-        # Stack mel spectrograms (pad to same length)
-        max_mel_len = max(mel.shape[-1] for mel in mel_specs)
-        mel_specs_padded = []
-        for mel in mel_specs:
-            pad_len = max_mel_len - mel.shape[-1]
-            mel_padded = F.pad(mel, (0, pad_len), value=0.0)
-            mel_specs_padded.append(mel_padded)
-        mel_specs = torch.stack(mel_specs_padded).to(device)
-        
-        # Forward pass with mixed precision
-        if use_fp16:
-            with torch.cuda.amp.autocast():
+        try:
+            input_ids = batch["input_ids"].to(device)
+            attention_mask = batch["attention_mask"].to(device)
+            waveforms = batch["waveforms"].to(device)
+            
+            # Compute mel spectrograms with cached transform
+            mel_specs = []
+            for waveform in waveforms:
+                mel_spec = mel_computer.compute(waveform)
+                mel_specs.append(mel_spec)
+            
+            # Stack mel spectrograms (pad to same length)
+            max_mel_len = max(mel.shape[-1] for mel in mel_specs)
+            mel_specs_padded = []
+            for mel in mel_specs:
+                pad_len = max_mel_len - mel.shape[-1]
+                mel_padded = F.pad(mel, (0, pad_len), value=0.0)
+                mel_specs_padded.append(mel_padded)
+            mel_specs = torch.stack(mel_specs_padded).to(device)
+            
+            # Forward pass with mixed precision
+            if use_fp16:
+                with torch.cuda.amp.autocast():
+                    outputs = model(
+                        input_ids=input_ids,
+                        attention_mask=attention_mask,
+                        labels=mel_specs
+                    )
+                    loss = outputs.loss / gradient_accumulation_steps
+                
+                # Backward pass with gradient scaling
+                scaler.scale(loss).backward()
+            else:
                 outputs = model(
                     input_ids=input_ids,
                     attention_mask=attention_mask,
                     labels=mel_specs
                 )
                 loss = outputs.loss / gradient_accumulation_steps
+                loss.backward()
             
-            # Backward pass with gradient scaling
-            scaler.scale(loss).backward()
-        else:
-            outputs = model(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                labels=mel_specs
-            )
-            loss = outputs.loss / gradient_accumulation_steps
-            loss.backward()
+            # Update weights after accumulation
+            if (batch_idx + 1) % gradient_accumulation_steps == 0:
+                if use_fp16:
+                    scaler.step(optimizer)
+                    scaler.update()
+                else:
+                    optimizer.step()
+                optimizer.zero_grad()
+            
+            total_loss += loss.item() * gradient_accumulation_steps
+            num_batches += 1
+            
+            # Update progress bar
+            progress_bar.set_postfix({"loss": f"{loss.item() * gradient_accumulation_steps:.4f}"})
         
-        # Update weights after accumulation
-        if (batch_idx + 1) % gradient_accumulation_steps == 0:
-            if use_fp16:
-                scaler.step(optimizer)
-                scaler.update()
-            else:
-                optimizer.step()
-            optimizer.zero_grad()
-        
-        total_loss += loss.item() * gradient_accumulation_steps
-        num_batches += 1
-        
-        # Update progress bar
-        progress_bar.set_postfix({"loss": f"{loss.item() * gradient_accumulation_steps:.4f}"})
+        except Exception as e:
+            error_count += 1
+            print(f"\nERROR in batch {batch_idx}: {str(e)[:100]}")
+            # Skip this batch and continue
+            continue
+    
+    if error_count > 0:
+        print(f"\n⚠️  Encountered {error_count} errors during training")
     
     return total_loss / num_batches if num_batches > 0 else 0.0
 
