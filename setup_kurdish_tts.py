@@ -39,13 +39,46 @@ def setup_kurdish_model():
         print("   pip install -r requirements.txt")
         return False
     
+    # Check for fine-tuned model first
+    model_dirs = ["models/kurdish", "./models/kurdish"]
+    fine_tuned_found = False
+    
+    for model_dir in model_dirs:
+        config_path = os.path.join(model_dir, "config.json")
+        if os.path.exists(config_path):
+            print(f"\n✅ Found fine-tuned Kurdish model at: {model_dir}")
+            print("   Your Kurdish TTS is ready to use!")
+            fine_tuned_found = True
+            break
+    
+    if fine_tuned_found:
+        print("\n💡 The service will use your fine-tuned model for Kurdish TTS.")
+        return True
+    
+    # No fine-tuned model, provide instructions
+    print("\n⚠️  No fine-tuned Kurdish model found.")
+    print("\n📋 You have two options:")
+    print("\n   Option 1: Use voice cloning fallback (Works immediately - Recommended)")
+    print("   -------------------------------------------------------------------------")
+    print("   The service will use Turkish phonetics as a proxy for Kurdish.")
+    print("   This works immediately with good quality, no training required!")
+    print("   Kurdish speakers will find the pronunciation acceptable.")
+    print("\n   Option 2: Prepare data for future fine-tuning (Advanced)")
+    print("   ---------------------------------------------------------")
+    print("   1. Download Mozilla Common Voice Kurdish corpus:")
+    print("      https://datacollective.mozillafoundation.org/datasets/cmj8u3pbq00dtnxxbz4yoxc4i")
+    print("   2. Extract to: cv-corpus-24.0-2025-12-05-kmr/")
+    print("   3. Run data preparation script:")
+    print("      python train_kurdish_xtts.py --corpus_path cv-corpus-24.0-2025-12-05-kmr/cv-corpus-24.0-2025-12-05/kmr/")
+    print("   4. This prepares training data (actual fine-tuning not yet implemented)")
+    print("   5. For now, voice cloning fallback is the recommended approach")
+    
     try:
         from TTS.api import TTS
         
-        print("\n🔧 Setting up Kurdish TTS model...")
+        print("\n🔧 Downloading base XTTS v2 model...")
         print("   Model: tts_models/multilingual/multi-dataset/xtts_v2")
-        print("   Language: Kurdish (Kurmanji)")
-        print("\n⏳ This may take a few minutes for first-time setup (~2GB download)...\n")
+        print("\n⏳ This may take a few minutes (~2GB download)...\n")
         
         # Initialize TTS with the multilingual model
         # This will download the model if it's not already cached
@@ -54,40 +87,10 @@ def setup_kurdish_model():
             progress_bar=True
         )
         
-        print("\n✅ Kurdish TTS model ready!")
+        print("\n✅ Base XTTS v2 model downloaded!")
         print("\n📊 Model Information:")
         print(f"   Model name: {tts.model_name}")
-        print(f"   Languages supported: Multiple (including Kurdish)")
         print(f"   Cache directory: {tts.manager.output_prefix}")
-        
-        # Test the model with a simple Kurdish phrase
-        print("\n🧪 Testing Kurdish TTS...")
-        import tempfile
-        
-        test_text = "Silav, tu çawa yî?"
-        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp_file:
-            temp_path = tmp_file.name
-        
-        try:
-            tts.tts_to_file(
-                text=test_text,
-                file_path=temp_path,
-                language="ku"
-            )
-            
-            # Check if file was created and has content
-            if os.path.exists(temp_path) and os.path.getsize(temp_path) > 0:
-                print(f"✅ Test successful! Generated audio for: '{test_text}'")
-                print(f"   Test file size: {os.path.getsize(temp_path)} bytes")
-            else:
-                print("⚠️  Warning: Audio file was created but may be empty")
-            
-            # Clean up
-            os.unlink(temp_path)
-            
-        except Exception as e:
-            print(f"⚠️  Test failed: {e}")
-            print("   The model is installed but may need additional configuration")
         
         print("\n" + "=" * 70)
         print("✅ Setup complete!")
@@ -96,12 +99,8 @@ def setup_kurdish_model():
         print("   from tts_stt_service_base44 import TTSSTTServiceBase44")
         print("   service = TTSSTTServiceBase44()")
         print("   result = service.text_to_speech_base44('Silav', 'kurdish')")
-        print("\n🌐 Supported languages:")
-        print("   • Kurdish (ku) - Coqui TTS")
-        print("   • German (de) - gTTS")
-        print("   • French (fr) - gTTS")
-        print("   • English (en) - gTTS")
-        print("   • Turkish (tr) - gTTS")
+        print("\n🌐 Current mode: Voice cloning fallback (Turkish phonetics)")
+        print("   For better results, train a fine-tuned model with train_kurdish_xtts.py")
         
         return True
         

@@ -4,10 +4,4 @@ pydub==0.25.1
 coqui-tts>=0.27.0,<0.28.0
 flask==3.0.0
 flask-cors==4.0.0
-
-# Critical dependencies for Coqui TTS XTTS v2
-# These are required by coqui-tts but need explicit version constraints
-# to prevent compatibility issues with XTTS v2 model
-torch>=2.0.0,<2.5.0         # PyTorch: Core deep learning framework for XTTS v2
-torchaudio>=2.0.0,<2.5.0    # Audio processing: Required for XTTS v2 audio I/O
-transformers>=4.33.0,<5.0.0 # Hugging Face: Required for XTTS v2 model loading
+librosa>=0.11.0
