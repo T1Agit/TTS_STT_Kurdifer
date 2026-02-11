@@ -33,6 +33,7 @@ class TTSSTTServiceBase44:
         self.recognizer = sr.Recognizer()
         self._coqui_tts = None  # Lazy initialization for Coqui TTS
         self._fine_tuned_model_path = None  # Path to fine-tuned Kurdish model
+        self._use_fine_tuned = False  # Flag to indicate if fine-tuned model is loaded
         self._check_fine_tuned_model()
     
     def _get_language_code(self, language: str) -> str:
@@ -86,8 +87,8 @@ class TTSSTTServiceBase44:
         """
         Generate speech using Coqui TTS for Kurdish
         
-        Uses voice cloning fallback with Turkish phonetics as proxy for Kurdish.
-        XTTS v2 base model doesn't support 'ku' language code directly.
+        If a fine-tuned Kurdish model exists, uses it with language='ku'.
+        Otherwise, falls back to voice cloning with Turkish phonetics as proxy.
         
         Args:
             text: Text to convert to speech
@@ -105,26 +106,73 @@ class TTSSTTServiceBase44:
                 
                 # Check if we have a fine-tuned model
                 if self._fine_tuned_model_path:
-                    print(f"   ⚠️  Fine-tuned model detected at: {self._fine_tuned_model_path}")
-                    print("   ⚠️  Fine-tuned model loading not yet implemented")
-                    print("   ℹ️  Falling back to voice cloning with Turkish phonetics")
-                    # TODO: Implement loading of fine-tuned model when available
-                    # For now, use base model with voice cloning fallback
+                    # Check for required model files
+                    model_path = os.path.join(self._fine_tuned_model_path, "best_model.pth")
+                    config_path = os.path.join(self._fine_tuned_model_path, "config.json")
                     
-                # Use base multilingual model with voice cloning
-                self._coqui_tts = TTS(
-                    model_name="tts_models/multilingual/multi-dataset/xtts_v2",
-                    progress_bar=False
-                )
-                print("✅ Coqui TTS initialized (voice cloning mode)")
+                    if os.path.exists(model_path) and os.path.exists(config_path):
+                        print(f"   ✅ Loading fine-tuned Kurdish model from: {self._fine_tuned_model_path}")
+                        try:
+                            # Load fine-tuned model
+                            self._coqui_tts = TTS(
+                                model_path=config_path,
+                                progress_bar=False
+                            )
+                            self._coqui_tts.load_checkpoint(
+                                config_path=config_path,
+                                checkpoint_path=model_path
+                            )
+                            self._use_fine_tuned = True
+                            print("   ✅ Fine-tuned Kurdish model loaded successfully")
+                            print("   ℹ️  Using language='ku' for Kurdish TTS")
+                        except Exception as e:
+                            print(f"   ⚠️  Error loading fine-tuned model: {e}")
+                            print("   ℹ️  Falling back to base model with Turkish phonetics")
+                            self._use_fine_tuned = False
+                            self._coqui_tts = TTS(
+                                model_name="tts_models/multilingual/multi-dataset/xtts_v2",
+                                progress_bar=False
+                            )
+                    else:
+                        print(f"   ⚠️  Fine-tuned model files not complete at: {self._fine_tuned_model_path}")
+                        print("   ℹ️  Falling back to base model with Turkish phonetics")
+                        self._use_fine_tuned = False
+                        self._coqui_tts = TTS(
+                            model_name="tts_models/multilingual/multi-dataset/xtts_v2",
+                            progress_bar=False
+                        )
+                else:
+                    # No fine-tuned model, use base model
+                    print("   ℹ️  No fine-tuned model found, using base XTTS v2")
+                    print("   ℹ️  Using Turkish phonetics as proxy for Kurdish")
+                    self._use_fine_tuned = False
+                    self._coqui_tts = TTS(
+                        model_name="tts_models/multilingual/multi-dataset/xtts_v2",
+                        progress_bar=False
+                    )
+                
+                if self._use_fine_tuned:
+                    print("✅ Coqui TTS initialized (fine-tuned Kurdish mode)")
+                else:
+                    print("✅ Coqui TTS initialized (voice cloning mode)")
             
             # Generate speech to temporary file
             with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp_file:
                 temp_path = tmp_file.name
             
-            # Generate audio using voice cloning with Turkish as phonetic proxy
-            print("   Using Turkish phonetics as proxy for Kurdish...")
-            self._generate_with_voice_cloning(text, temp_path)
+            # Generate audio
+            if self._use_fine_tuned:
+                # Use fine-tuned model with Kurdish language code
+                print("   Generating with fine-tuned Kurdish model (language='ku')...")
+                self._coqui_tts.tts_to_file(
+                    text=text,
+                    file_path=temp_path,
+                    language="ku"
+                )
+            else:
+                # Fallback to voice cloning with Turkish phonetics
+                print("   Using Turkish phonetics as proxy for Kurdish...")
+                self._generate_with_voice_cloning(text, temp_path)
             
             # Read the generated file
             with open(temp_path, 'rb') as f:
