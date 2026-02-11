@@ -25,6 +25,30 @@ import numpy as np
 from tqdm import tqdm
 
 
+def get_linear_schedule_with_warmup(optimizer, num_warmup_steps, num_training_steps, last_epoch=-1):
+    """
+    Create a learning rate scheduler with linear warmup and linear decay.
+    
+    Args:
+        optimizer: The optimizer for which to schedule the learning rate
+        num_warmup_steps: Number of steps for the warmup phase
+        num_training_steps: Total number of training steps
+        last_epoch: The index of the last epoch when resuming training
+        
+    Returns:
+        Learning rate scheduler
+    """
+    def lr_lambda(current_step: int):
+        if current_step < num_warmup_steps:
+            return float(current_step) / float(max(1, num_warmup_steps))
+        return max(
+            0.0, float(num_training_steps - current_step) / float(max(1, num_training_steps - num_warmup_steps))
+        )
+    
+    from torch.optim.lr_scheduler import LambdaLR
+    return LambdaLR(optimizer, lr_lambda, last_epoch)
+
+
 def parse_args():
     """Parse command line arguments"""
     parser = argparse.ArgumentParser(description="Fine-tune VITS/MMS for Kurdish TTS")
@@ -67,8 +91,8 @@ def parse_args():
     parser.add_argument(
         "--learning_rate",
         type=float,
-        default=2e-5,
-        help="Learning rate (default: 2e-5)"
+        default=2e-4,
+        help="Learning rate (default: 2e-4)"
     )
     parser.add_argument(
         "--epochs",
@@ -87,6 +111,12 @@ def parse_args():
         type=int,
         default=0,
         help="Maximum samples to use (0 = all, default: 0)"
+    )
+    parser.add_argument(
+        "--warmup_steps",
+        type=int,
+        default=500,
+        help="Number of warmup steps for learning rate scheduler (default: 500)"
     )
     return parser.parse_args()
 
@@ -174,8 +204,11 @@ def compute_mel_spectrogram(
     waveform: torch.Tensor,
     sample_rate: int = 16000,
     n_fft: int = 1024,
+    win_length: int = 1024,
     hop_length: int = 256,
-    n_mels: int = 80
+    n_mels: int = 80,
+    fmin: float = 0.0,
+    fmax: float = 8000.0
 ) -> torch.Tensor:
     """
     Compute mel spectrogram from waveform
@@ -184,8 +217,11 @@ def compute_mel_spectrogram(
         waveform: Audio waveform tensor
         sample_rate: Sample rate in Hz
         n_fft: FFT window size
+        win_length: Window length for STFT
         hop_length: Hop length for STFT
         n_mels: Number of mel filterbanks
+        fmin: Minimum frequency
+        fmax: Maximum frequency
         
     Returns:
         Mel spectrogram tensor
@@ -195,8 +231,11 @@ def compute_mel_spectrogram(
     mel_transform = torchaudio.transforms.MelSpectrogram(
         sample_rate=sample_rate,
         n_fft=n_fft,
+        win_length=win_length,
         hop_length=hop_length,
-        n_mels=n_mels
+        n_mels=n_mels,
+        f_min=fmin,
+        f_max=fmax
     )
     
     mel_spec = mel_transform(waveform)
@@ -214,15 +253,21 @@ class MelSpectrogramComputer:
         self,
         sample_rate: int = 16000,
         n_fft: int = 1024,
+        win_length: int = 1024,
         hop_length: int = 256,
         n_mels: int = 80,
+        fmin: float = 0.0,
+        fmax: float = 8000.0,
         device: torch.device = None
     ):
         self.mel_transform = torchaudio.transforms.MelSpectrogram(
             sample_rate=sample_rate,
             n_fft=n_fft,
+            win_length=win_length,
             hop_length=hop_length,
-            n_mels=n_mels
+            n_mels=n_mels,
+            f_min=fmin,
+            f_max=fmax
         )
         if device is not None:
             self.mel_transform = self.mel_transform.to(device)
@@ -278,6 +323,7 @@ def train_epoch(
     model: VitsModel,
     dataloader: DataLoader,
     optimizer: torch.optim.Optimizer,
+    scheduler,
     device: torch.device,
     gradient_accumulation_steps: int = 1,
     use_fp16: bool = True
@@ -348,6 +394,11 @@ def train_epoch(
                 scaler.update()
             else:
                 optimizer.step()
+            
+            # Step the learning rate scheduler
+            if scheduler is not None:
+                scheduler.step()
+            
             optimizer.zero_grad()
         
         total_loss += loss.item() * gradient_accumulation_steps
@@ -421,6 +472,9 @@ def main():
     if device.type == "cuda":
         print(f"   GPU: {torch.cuda.get_device_name(0)}")
         print(f"   VRAM: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB")
+        # Enable cudnn benchmark for better performance
+        torch.backends.cudnn.benchmark = True
+        print("   cudnn.benchmark: enabled")
     
     # Load tokenizer and model
     print(f"\n📦 Loading model and tokenizer...")
@@ -468,6 +522,17 @@ def main():
         eps=1e-8
     )
     
+    # Setup learning rate scheduler with warmup
+    num_training_steps = len(dataloader) * args.epochs // args.gradient_accumulation_steps
+    scheduler = get_linear_schedule_with_warmup(
+        optimizer,
+        num_warmup_steps=args.warmup_steps,
+        num_training_steps=num_training_steps
+    )
+    print(f"\n📊 Training configuration:")
+    print(f"   Total training steps: {num_training_steps}")
+    print(f"   Warmup steps: {args.warmup_steps}")
+    
     # Training loop
     print(f"\n🚀 Starting training for {args.epochs} epochs...")
     print("=" * 70)
@@ -482,6 +547,7 @@ def main():
             model=model,
             dataloader=dataloader,
             optimizer=optimizer,
+            scheduler=scheduler,
             device=device,
             gradient_accumulation_steps=args.gradient_accumulation_steps,
             use_fp16=args.fp16 and device.type == "cuda"

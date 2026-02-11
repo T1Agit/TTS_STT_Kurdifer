@@ -171,8 +171,11 @@ def compute_mel_spectrogram(
     waveform: torch.Tensor,
     sample_rate: int = 16000,
     n_fft: int = 1024,
+    win_length: int = 1024,
     hop_length: int = 256,
-    n_mels: int = 80
+    n_mels: int = 80,
+    fmin: float = 0.0,
+    fmax: float = 8000.0
 ) -> torch.Tensor:
     """Compute mel spectrogram from waveform"""
     # Note: This function should be called with a pre-initialized transform
@@ -180,8 +183,11 @@ def compute_mel_spectrogram(
     mel_transform = torchaudio.transforms.MelSpectrogram(
         sample_rate=sample_rate,
         n_fft=n_fft,
+        win_length=win_length,
         hop_length=hop_length,
-        n_mels=n_mels
+        n_mels=n_mels,
+        f_min=fmin,
+        f_max=fmax
     )
     
     mel_spec = mel_transform(waveform)
@@ -197,15 +203,21 @@ class MelSpectrogramComputer:
         self,
         sample_rate: int = 16000,
         n_fft: int = 1024,
+        win_length: int = 1024,
         hop_length: int = 256,
         n_mels: int = 80,
+        fmin: float = 0.0,
+        fmax: float = 8000.0,
         device: torch.device = None
     ):
         self.mel_transform = torchaudio.transforms.MelSpectrogram(
             sample_rate=sample_rate,
             n_fft=n_fft,
+            win_length=win_length,
             hop_length=hop_length,
-            n_mels=n_mels
+            n_mels=n_mels,
+            f_min=fmin,
+            f_max=fmax
         )
         if device is not None:
             self.mel_transform = self.mel_transform.to(device)
