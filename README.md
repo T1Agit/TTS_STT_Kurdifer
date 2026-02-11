@@ -144,8 +144,11 @@ pip install -r requirements.txt
 
 **Version Constraints Rationale:**
 - **PyTorch & torchaudio 2.0.0-2.5.0**: XTTS v2 requires PyTorch 2.x for optimal performance. Version 2.5.0+ may introduce breaking changes.
+  - **Security Note**: Use torch>=2.2.0 for security patches. The constraint allows 2.0.0+ for compatibility but 2.2.0+ is recommended.
 - **transformers 4.33.0-5.0.0**: XTTS v2 depends on Hugging Face transformers 4.33+. Version 5.0.0+ has incompatible API changes.
+  - **Security Note**: Use transformers>=4.48.0 for security patches. The constraint allows 4.33.0+ for compatibility but 4.48.0+ is recommended.
 - These constraints prevent installation and runtime failures with Coqui TTS XTTS v2 model.
+- Pip will automatically install the latest compatible versions within these constraints, which include important security fixes.
 
 #### 3. Install Node.js Dependencies (Optional - for Node.js API)
 ```bash
