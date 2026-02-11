@@ -21,3 +21,17 @@ tts_models/
 # Python virtual environment
 venv/
 env/
+
+# Training data and outputs
+training/
+feedback_data/
+models/mms-kurdish-finetuned/
+processed_audio/
+
+# Checkpoints
+*.pt
+*.pth
+checkpoints/
+
+# Dataset cache
+.datasets/

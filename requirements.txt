@@ -8,3 +8,8 @@ librosa>=0.11.0
 tqdm>=4.65.0
 pandas>=1.5.0
 soundfile>=0.12.0
+datasets>=2.14.0
+transformers>=4.30.0
+accelerate>=0.20.0
+# Explicitly exclude torchcodec - broken on Windows
+# Use soundfile instead for audio loading
