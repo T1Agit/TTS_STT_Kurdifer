@@ -230,6 +230,38 @@ curl -X POST http://localhost:5000/tts \
 
 ## 🧠 Train Custom Kurdish Voice
 
+### NEW: Complete MMS Fine-Tuning Pipeline 🚀
+
+We now have a complete pipeline for fine-tuning the MMS Kurdish model on CommonVoice data!
+
+**[📖 Read the complete guide: TRAINING_PIPELINE.md](TRAINING_PIPELINE.md)**
+
+#### Quick Start (3 steps):
+
+```bash
+# 1. Prepare data (fixes torchcodec issue, uses soundfile)
+python prepare_data.py --output_dir training --max_samples 500
+
+# 2. Fine-tune MMS model
+python train_vits.py --data_dir training --epochs 10
+
+# 3. Add user feedback corrections
+python train_feedback.py --model_dir models/mms-kurdish-finetuned/final --audio recording.wav --text "Corrected text"
+```
+
+**Features:**
+- ✅ **Fixes torchcodec issue** - Uses soundfile backend for audio loading
+- ✅ **Loads CommonVoice dataset** - 45,992 Kurdish samples from `amedcj/kurmanji-commonvoice`
+- ✅ **Fine-tunes MMS model** - `facebook/mms-tts-kmr-script_latin` (36M params)
+- ✅ **Optimized for RTX 2070** - Works on 8GB VRAM
+- ✅ **Feedback loop** - Continuous improvement with user corrections
+
+See [TRAINING_PIPELINE.md](TRAINING_PIPELINE.md) for detailed instructions.
+
+---
+
+### Alternative: Google Colab (XTTS v2)
+
 Use Google Colab for FREE GPU training:
 
 **[Open Colab Notebook](https://colab.research.google.com/github/T1Agit/TTS_STT_Kurdifer/blob/main/kurdish_tts_training.ipynb)**
@@ -254,6 +286,9 @@ TTS_STT_Kurdifer/
 ├── base44.py                       # Base44 encoding (Python)
 ├── base44.js                       # Base44 encoding (JavaScript/Node.js)
 ├── setup_kurdish_tts.py            # Automated XTTS v2 setup script
+├── prepare_data.py                 # 🆕 Data preparation (fixes torchcodec)
+├── train_vits.py                   # 🆕 MMS model fine-tuning
+├── train_feedback.py               # 🆕 Feedback-loop training
 ├── test_kurdish_implementation.py  # Python unit tests
 ├── test-integration.js             # Node.js integration tests
 ├── client-example.js               # API client example
@@ -264,6 +299,7 @@ TTS_STT_Kurdifer/
 ├── railway.json                    # Railway config
 ├── kurdish_tts_training.ipynb      # Colab training notebook (optional)
 ├── README.md                       # This file
+├── TRAINING_PIPELINE.md            # 🆕 Complete training guide
 ├── IMPLEMENTATION_SUMMARY.md       # Implementation details
 └── KURDISH_TTS_IMPLEMENTATION.md   # Kurdish TTS documentation
 ```
@@ -271,6 +307,35 @@ TTS_STT_Kurdifer/
 ---
 
 ## 🐛 Troubleshooting
+
+### Audio Loading and Dataset Issues
+
+**Problem:** Torchcodec library fails on Windows with "Could not load libtorchcodec" error
+```bash
+# Solution: Uninstall torchcodec and use soundfile instead
+pip uninstall torchcodec -y
+
+# Verify soundfile is installed
+pip install soundfile
+
+# Set environment variable for datasets library
+export HF_AUDIO_DECODER=soundfile  # Linux/Mac
+set HF_AUDIO_DECODER=soundfile     # Windows CMD
+$env:HF_AUDIO_DECODER="soundfile"  # Windows PowerShell
+
+# Our prepare_data.py script handles this automatically
+python prepare_data.py --output_dir training
+```
+
+**Problem:** Cannot load amedcj/kurmanji-commonvoice dataset
+```bash
+# Solution: Check internet connection and HuggingFace credentials
+# Clear cache if needed
+rm -rf ~/.cache/huggingface/
+
+# Try loading dataset manually to test
+python -c "from datasets import load_dataset; ds = load_dataset('amedcj/kurmanji-commonvoice', split='train[:10]'); print('Success!')"
+```
 
 ### PyTorch and Transformers Issues
 
