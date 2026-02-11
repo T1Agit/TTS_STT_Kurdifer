@@ -3,16 +3,26 @@ Flask API Server for Kurdish TTS/STT Service
 """
 
 import os
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from tts_stt_service_base44 import TTSSTTServiceBase44
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='.')
 CORS(app)
 
 service = TTSSTTServiceBase44()
 
-@app.route('/', methods=['GET'])
+@app.route('/')
+def index():
+    """Serve the main web UI"""
+    return send_from_directory('.', 'index.html')
+
+@app.route('/base44.js')
+def base44_js():
+    """Serve the base44.js library"""
+    return send_from_directory('.', 'base44.js')
+
+@app.route('/api', methods=['GET'])
 def home():
     return jsonify({
         'service': 'Kurdish TTS/STT API',
