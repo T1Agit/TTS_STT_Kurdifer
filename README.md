@@ -110,6 +110,12 @@ fetch('https://ttststtkurdifer-production.up.railway.app/tts', {
 
 ## 🛠️ Local Development
 
+### Prerequisites
+
+- **Python**: 3.8 - 3.12 (tested with 3.12.3)
+- **Disk Space**: ~2GB for XTTS v2 model (Kurdish TTS)
+- **Internet**: Required for first-time model download
+
 ### 1. Clone Repository
 ```bash
 git clone https://github.com/T1Agit/TTS_STT_Kurdifer.git
@@ -117,20 +123,121 @@ cd TTS_STT_Kurdifer
 ```
 
 ### 2. Install Dependencies
+
+**Important**: Kurdish TTS requires PyTorch and XTTS v2:
+
 ```bash
+# Install all dependencies (includes PyTorch 2.x and Coqui TTS)
 pip install -r requirements.txt
+
+# This will install:
+# - PyTorch 2.x and torchaudio (for XTTS v2)
+# - Coqui TTS 0.27.x (with XTTS v2 model support)
+# - gTTS (for other languages)
+# - Flask and other dependencies
 ```
 
-### 3. Run Server
+**Version Notes**:
+- `torch>=2.0.0,<2.5.0` (tested with 2.0-2.4.1)
+- `torchaudio>=2.0.0,<2.5.0` (matches torch version)
+- `coqui-tts>=0.27.0,<0.28.0` (XTTS v2 support)
+
+**Note**: PyTorch 2.6+ changes `torch.load()` behavior. If you encounter issues with PyTorch 2.6+, use version 2.4.1 or lower.
+
+### 3. Setup Kurdish TTS (Optional Test)
+
+Test the XTTS v2 model installation:
+
+```bash
+python setup_kurdish_tts.py
+```
+
+This will:
+- Download XTTS v2 model (~2GB, first time only)
+- Test Kurdish TTS with sample phrase
+- Verify model is working correctly
+
+### 4. Run Server
 ```bash
 python api_server.py
 ```
 
 Server runs on: `http://localhost:5000`
 
-### 4. Test TTS
+### 5. Test TTS
 ```bash
 python tts_stt_service_base44.py
+```
+
+---
+
+## 🎯 XTTS v2 & Kurdish Support
+
+### What is XTTS v2?
+
+**XTTS v2** (eXtensible Text-to-Speech version 2) is Coqui TTS's state-of-the-art multilingual TTS model:
+
+- **Model**: `tts_models/multilingual/multi-dataset/xtts_v2`
+- **Languages**: 16+ languages including **Kurdish (Kurmanji)**
+- **Quality**: Neural TTS with natural prosody and intonation
+- **Size**: ~2GB (downloads automatically on first use)
+- **Speed**: 1-3 seconds per sentence after initialization
+
+### Kurdish Language Support
+
+This project uses XTTS v2 for **Kurdish (Kurmanji)** text-to-speech:
+
+```python
+from tts_stt_service_base44 import TTSSTTServiceBase44
+
+service = TTSSTTServiceBase44()
+result = service.text_to_speech_base44("Silav, tu çawa yî?", "kurdish")
+# Returns Base44-encoded MP3 audio
+```
+
+**Features**:
+- ✅ Native Kurdish (Kurmanji) support via XTTS v2
+- ✅ Automatic model download and caching
+- ✅ High-quality neural voice synthesis
+- ✅ No training required (pre-trained model)
+- ✅ Works offline after initial download
+
+**Language Routing**:
+- **Kurdish (`ku`)**: Uses Coqui TTS with XTTS v2 model
+- **Other languages** (`en`, `de`, `fr`, `tr`): Uses Google TTS (gTTS)
+
+### First-Time Setup
+
+The XTTS v2 model downloads automatically when you first use Kurdish TTS:
+
+```bash
+# Test installation and download model
+python setup_kurdish_tts.py
+
+# Or just use the API - model downloads on first Kurdish TTS request
+python api_server.py
+```
+
+**Download Progress**:
+- Size: ~2GB
+- Time: 2-5 minutes (depends on internet speed)
+- Location: Cached in `~/.local/share/tts/` (Linux/Mac) or `%USERPROFILE%\.local\share\tts\` (Windows)
+- One-time only: Subsequent calls use cached model
+
+### Model Compatibility
+
+**Supported PyTorch Versions**:
+- ✅ PyTorch 2.0.x - 2.4.x (recommended: 2.4.1)
+- ⚠️ PyTorch 2.5.x (may work but not extensively tested)
+- ❌ PyTorch 2.6+ (has breaking changes with `torch.load()`)
+
+**Version Resolution**:
+```bash
+# Check your versions
+pip list | grep -E "torch|coqui"
+
+# If you have PyTorch 2.6+, downgrade to 2.4.1:
+pip install torch==2.4.1 torchaudio==2.4.1
 ```
 
 ---
@@ -169,15 +276,20 @@ TTS_STT_Kurdifer/
 
 ## 🌍 Supported Languages
 
-| Language | Code | TTS Engine |
-|----------|------|------------|
-| English | `en`, `english` | gTTS (Google) |
-| German | `de`, `german` | gTTS (Google) |
-| French | `fr`, `french` | gTTS (Google) |
-| Turkish | `tr`, `turkish` | gTTS (Google) |
-| Kurdish | `ku`, `kurdish` | Coqui TTS (Custom) |
+| Language | Code | TTS Engine | Model |
+|----------|------|------------|-------|
+| English | `en`, `english` | gTTS (Google) | Online API |
+| German | `de`, `german` | gTTS (Google) | Online API |
+| French | `fr`, `french` | gTTS (Google) | Online API |
+| Turkish | `tr`, `turkish` | gTTS (Google) | Online API |
+| **Kurdish (Kurmanji)** | `ku`, `kurdish` | **Coqui TTS** | **XTTS v2** (~2GB) |
 
-**Note:** Kurdish requires local Coqui TTS setup (see training notebook).
+**Kurdish TTS Details**:
+- Uses state-of-the-art XTTS v2 multilingual model
+- No training required - pre-trained model included
+- Automatic download on first use (~2GB, cached locally)
+- High-quality neural voice with natural prosody
+- Works offline after initial download
 
 ---
 

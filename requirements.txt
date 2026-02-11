@@ -1,6 +1,16 @@
+# Core TTS/STT dependencies
 SpeechRecognition==3.10.1
 gTTS==2.5.0
 pydub==0.25.1
+
+# Coqui TTS and XTTS v2 for Kurdish support
+# Requires PyTorch 2.x (tested with 2.0-2.4.1)
+# Note: torch and torchaudio should match versions
+torch>=2.0.0,<2.5.0
+torchaudio>=2.0.0,<2.5.0
+transformers>=4.33.0,<5.0.0
 coqui-tts>=0.27.0,<0.28.0
+
+# Flask API server
 flask==3.0.0
 flask-cors==4.0.0
