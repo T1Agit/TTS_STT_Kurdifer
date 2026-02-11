@@ -2,17 +2,16 @@
 Base44 Encoding/Decoding Module
 
 Implements Base44 encoding using a 44-character alphabet:
-A-Z (26 chars), a-z (26 chars, but we only use first 8), 0-9 (10 chars) = 44 chars total
-Alphabet: ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefgh-_
+0-9 (10 chars), A-Z (26 chars), a-h (8 chars) = 44 chars total
+Alphabet: 0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefgh
 """
 
 
 class Base44:
     """Base44 encoder/decoder using 44-character alphabet"""
     
-    # First 44 characters: A-Z (26), 0-9 (10), a-h (8) = 44 chars
-    # Using slice [:44] for defensive programming to ensure exactly 44 characters
-    ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefgh-_"[:44]
+    # First 44 characters: 0-9 (10), A-Z (26), a-h (8) = 44 chars
+    ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefgh"
     BASE = 44
     
     @classmethod
