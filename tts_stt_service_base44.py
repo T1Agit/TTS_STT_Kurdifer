@@ -161,7 +161,7 @@ class TTSSTTServiceBase44:
                 temp_path = tmp_file.name
             
             # Generate audio
-            if hasattr(self, '_use_fine_tuned') and self._use_fine_tuned:
+            if self._use_fine_tuned:
                 # Use fine-tuned model with Kurdish language code
                 print("   Generating with fine-tuned Kurdish model (language='ku')...")
                 self._coqui_tts.tts_to_file(

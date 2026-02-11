@@ -21,7 +21,7 @@ import argparse
 import pandas as pd
 import numpy as np
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional
+from typing import List, Tuple, Optional
 import shutil
 from datetime import datetime
 
@@ -164,8 +164,11 @@ class CommonVoiceDataPreparation:
         processed_data = []
         total = len(df) if max_samples is None or max_samples == 0 else min(len(df), max_samples)
         
-        # Use tqdm for progress bar
-        for idx, row in tqdm(df.head(total).iterrows(), total=total, desc="Processing audio"):
+        # Use tqdm for progress bar - iterate over index to properly track progress
+        df_subset = df.head(total)
+        for idx in tqdm(df_subset.index, desc="Processing audio"):
+            row = df_subset.loc[idx]
+            
             # Get audio file path
             audio_filename = row['path']
             audio_path = self.clips_dir / audio_filename
@@ -373,9 +376,26 @@ class XTTSv2FineTuner:
             if resume:
                 checkpoints = list(self.checkpoint_dir.glob("checkpoint_*.pth"))
                 if checkpoints:
-                    latest_checkpoint = max(checkpoints, key=lambda x: int(x.stem.split('_')[1]))
-                    trainer_args.restore_path = str(latest_checkpoint)
-                    print(f"   ℹ️  Resuming from: {latest_checkpoint}")
+                    # Sort checkpoints by step number, with error handling
+                    valid_checkpoints = []
+                    for cp in checkpoints:
+                        try:
+                            # Extract step number from checkpoint_<step>.pth
+                            parts = cp.stem.split('_')
+                            if len(parts) >= 2:
+                                step_num = int(parts[-1])
+                                valid_checkpoints.append((step_num, cp))
+                        except (ValueError, IndexError):
+                            print(f"   ⚠️  Skipping invalid checkpoint name: {cp.name}")
+                            continue
+                    
+                    if valid_checkpoints:
+                        # Get checkpoint with highest step number
+                        latest_checkpoint = max(valid_checkpoints, key=lambda x: x[0])[1]
+                        trainer_args.restore_path = str(latest_checkpoint)
+                        print(f"   ℹ️  Resuming from: {latest_checkpoint}")
+                    else:
+                        print(f"   ⚠️  No valid checkpoints found to resume from")
                 else:
                     print(f"   ⚠️  No checkpoints found to resume from")
             
