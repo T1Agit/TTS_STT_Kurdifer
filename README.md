@@ -230,6 +230,29 @@ curl -X POST http://localhost:5000/tts \
 
 ## 🧠 Train Custom Kurdish Voice
 
+### Option 1: MMS Fine-Tuning with Common Voice Data (New!)
+
+Use the new training pipeline to fine-tune the MMS model on high-quality Kurdish Common Voice data:
+
+```bash
+# Step 1: Prepare data from Common Voice
+python prepare_data.py --max_samples 5000
+
+# Step 2: Fine-tune MMS model (Note: Requires VITS loss implementation)
+# See TRAINING_README.md for details
+```
+
+**Features**:
+- ✅ Automatic data preparation from HuggingFace datasets
+- ✅ Bypasses `torchcodec` dependency issue
+- ✅ Quality filtering (2+ upvotes, 0 downvotes)
+- ✅ Optimized for RTX 2070 8GB VRAM
+- ✅ Incremental fine-tuning with user feedback
+
+📖 **[Complete Training Guide](TRAINING_README.md)** - Step-by-step instructions, troubleshooting, and best practices
+
+### Option 2: XTTS v2 Fine-Tuning (Existing)
+
 Use Google Colab for FREE GPU training:
 
 **[Open Colab Notebook](https://colab.research.google.com/github/T1Agit/TTS_STT_Kurdifer/blob/main/kurdish_tts_training.ipynb)**
@@ -254,6 +277,10 @@ TTS_STT_Kurdifer/
 ├── base44.py                       # Base44 encoding (Python)
 ├── base44.js                       # Base44 encoding (JavaScript/Node.js)
 ├── setup_kurdish_tts.py            # Automated XTTS v2 setup script
+├── prepare_data.py                 # NEW: Data preparation for MMS training
+├── train_vits.py                   # NEW: MMS fine-tuning script
+├── train_feedback.py               # NEW: Incremental fine-tuning with feedback
+├── test_training_scripts.py        # NEW: Training scripts validation
 ├── test_kurdish_implementation.py  # Python unit tests
 ├── test-integration.js             # Node.js integration tests
 ├── client-example.js               # API client example
@@ -264,6 +291,7 @@ TTS_STT_Kurdifer/
 ├── railway.json                    # Railway config
 ├── kurdish_tts_training.ipynb      # Colab training notebook (optional)
 ├── README.md                       # This file
+├── TRAINING_README.md              # NEW: Complete training guide
 ├── IMPLEMENTATION_SUMMARY.md       # Implementation details
 └── KURDISH_TTS_IMPLEMENTATION.md   # Kurdish TTS documentation
 ```
