@@ -151,7 +151,7 @@ class KurdishTTSDataset(Dataset):
         try:
             # Load audio with soundfile (no torchcodec dependency)
             audio_data, sample_rate = sf.read(str(wav_path))
-        except Exception as e:
+        except (sf.LibsndfileError, RuntimeError) as e:
             # Print error for audio loading failures
             print(f"❌ Error loading audio {wav_path}: {e}")
             raise
@@ -173,6 +173,8 @@ class KurdishTTSDataset(Dataset):
                 pass
             else:
                 # For very short audio (<=2 samples), assume mono and reshape
+                # Note: Shape (2,2) is ambiguous - could be 2ch x 2samples or 2samples x 2ch
+                # We assume mono for consistency. This edge case is rare in real training data.
                 waveform = waveform.reshape(1, -1)
         
         # Ensure mono
