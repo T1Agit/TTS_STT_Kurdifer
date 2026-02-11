@@ -2,7 +2,19 @@
 """
 VITS/MMS Fine-Tuning Script for Kurdish Kurmanji TTS
 
-This script fine-tunes the facebook/mms-tts-kmr-script_latin model on prepared Kurdish audio data.
+⚠️  IMPORTANT NOTE:
+This script provides a framework for MMS model fine-tuning, but full VITS training
+requires implementing custom loss functions including:
+- Reconstruction loss (mel-spectrogram)
+- KL divergence loss  
+- Discriminator losses
+- Duration predictor loss
+
+The current implementation demonstrates the pipeline but may not produce optimal
+results without these TTS-specific losses. For production use, consider:
+1. Using the existing XTTS v2 approach (train_kurdish_xtts.py)
+2. Implementing full VITS training losses
+3. Using a specialized TTS training framework
 
 Features:
 - Loads base MMS model (36M params, 138MB, Kurdish vocab included)
@@ -282,12 +294,23 @@ class MMSFineTuner:
                     outputs = self.model(**inputs)
                     
                     # For VITS, we need to compute loss differently
-                    # This is a simplified version - actual VITS training is more complex
-                    # In practice, you would need the full VITS training loop
+                    # The VitsModel from transformers doesn't have built-in training loss
+                    # In a production setting, you would need:
+                    # 1. Reconstruction loss (mel-spectrogram)
+                    # 2. KL divergence loss
+                    # 3. Discriminator losses
+                    # For this simplified version, we skip training and just load/save the model
+                    # Real VITS training requires a custom training loop with TTS-specific losses
                     
-                    # For now, we'll use a reconstruction loss as placeholder
-                    # Real implementation would use VITS-specific losses
-                    loss = outputs.loss if hasattr(outputs, 'loss') else torch.tensor(0.0, device=self.device)
+                    # Note: This is a placeholder for demonstration
+                    # Actual fine-tuning would require implementing VITS training losses
+                    if hasattr(outputs, 'loss') and outputs.loss is not None:
+                        loss = outputs.loss
+                    else:
+                        # Skip this batch as we can't compute proper loss
+                        print(f"\n⚠️  Warning: Model outputs don't include loss. Skipping batch.")
+                        print("   Note: VITS fine-tuning requires custom training loop with TTS-specific losses.")
+                        continue
                     
                     # Scale loss for gradient accumulation
                     loss = loss / gradient_accumulation_steps
@@ -337,15 +360,20 @@ class MMSFineTuner:
             avg_epoch_loss = epoch_loss / num_batches if num_batches > 0 else 0
             print(f"\n   Average loss: {avg_epoch_loss:.4f}")
             
-            # Save epoch checkpoint
-            self.save_checkpoint(f"epoch_{epoch + 1}", avg_epoch_loss)
+            # Save epoch checkpoint (using just epoch number as identifier)
+            self.save_checkpoint(str(epoch + 1), avg_epoch_loss)
         
         print(f"\n✅ Training complete!")
         print(f"   Best loss: {best_loss:.4f}")
         print(f"   Total steps: {global_step}")
     
     def save_checkpoint(self, identifier: str, loss: float):
-        """Save training checkpoint"""
+        """
+        Save training checkpoint
+        
+        Args:
+            identifier: Checkpoint identifier (e.g., "epoch_1", "1000")
+        """
         checkpoint_path = self.output_dir / "checkpoints" / f"checkpoint_{identifier}.pt"
         
         checkpoint = {

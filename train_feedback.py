@@ -323,8 +323,13 @@ class FeedbackTrainer:
                     optimizer.zero_grad()
                     outputs = self.model(**inputs)
                     
-                    # Compute loss (simplified)
-                    loss = outputs.loss if hasattr(outputs, 'loss') else torch.tensor(0.0, device=self.device)
+                    # Compute loss
+                    if hasattr(outputs, 'loss') and outputs.loss is not None:
+                        loss = outputs.loss
+                    else:
+                        # Skip this batch as we can't compute proper loss
+                        print(f"\n⚠️  Warning: Model outputs don't include loss. Skipping batch.")
+                        continue
                     
                     # Backward pass
                     loss.backward()
@@ -348,9 +353,23 @@ class FeedbackTrainer:
         print(f"\n✅ Training complete!")
     
     def save_model(self):
-        """Save updated model"""
-        # Create backup of previous model
-        backup_dir = self.model_dir.parent / f"{self.model_dir.name}_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        """Save updated model with backup management"""
+        # Create backup of previous model (keep only last 3 backups)
+        backup_base = self.model_dir.parent / f"{self.model_dir.name}_backup"
+        
+        # Find existing backups
+        existing_backups = sorted(self.model_dir.parent.glob(f"{self.model_dir.name}_backup_*"))
+        
+        # Remove old backups if more than 2 exist
+        if len(existing_backups) >= 3:
+            for old_backup in existing_backups[:-2]:
+                shutil.rmtree(old_backup)
+                print(f"   Removed old backup: {old_backup.name}")
+        
+        # Create new backup
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        backup_dir = self.model_dir.parent / f"{self.model_dir.name}_backup_{timestamp}"
+        
         if self.model_dir.exists():
             shutil.copytree(self.model_dir, backup_dir)
             print(f"   Backup saved to: {backup_dir.name}")

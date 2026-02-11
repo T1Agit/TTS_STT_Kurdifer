@@ -145,7 +145,9 @@ class KurdishDataPreparation:
         )
         
         final_count = len(dataset)
-        if final_count < len(dataset) if has_votes else initial_count:
+        # Compare to the count after vote filtering (or initial if no votes)
+        prev_count = filtered_count if has_votes else initial_count
+        if final_count < prev_count:
             print(f"   ✅ After removing empty text: {final_count:,} samples")
         
         return dataset
