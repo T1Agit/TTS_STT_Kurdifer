@@ -151,7 +151,50 @@ def test_soundfile_loading():
         all_passed = False
     
     # Test 4: Verify no torchcodec import is needed
-    print("\n📝 Test 4: Verify No torchcodec Import")
+    print("\n📝 Test 4: Edge Case - Very Short Audio (<=2 samples)")
+    print("-" * 70)
+    
+    try:
+        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp:
+            tmp_path = tmp.name
+        
+        # Create very short audio (2 samples)
+        very_short_audio = np.array([0.5, -0.5], dtype=np.float32)
+        sf.write(tmp_path, very_short_audio, 16000)
+        
+        # Load with soundfile
+        loaded_audio, loaded_sr = sf.read(tmp_path)
+        
+        # Convert to torch tensor
+        waveform = torch.from_numpy(loaded_audio).float()
+        
+        # Apply same logic as training code
+        if waveform.dim() == 1:
+            waveform = waveform.unsqueeze(0)
+        elif waveform.dim() == 2:
+            if waveform.shape[1] == 2 and waveform.shape[0] > 2:
+                waveform = waveform.transpose(0, 1)
+            elif waveform.shape[0] == 2 and waveform.shape[1] > 2:
+                pass
+            else:
+                # For very short audio, assume mono
+                waveform = waveform.reshape(1, -1)
+        
+        # Verify
+        assert waveform.shape[0] == 1, f"Expected 1 channel, got {waveform.shape[0]}"
+        assert waveform.shape[1] == 2, f"Expected 2 samples, got {waveform.shape[1]}"
+        
+        print(f"✅ Handled very short audio correctly: shape={waveform.shape}")
+        
+        # Clean up
+        os.unlink(tmp_path)
+        
+    except Exception as e:
+        print(f"❌ Failed to handle very short audio: {e}")
+        all_passed = False
+    
+    # Test 5: Verify no torchcodec import is needed
+    print("\n📝 Test 5: Verify No torchcodec Import")
     print("-" * 70)
     
     try:

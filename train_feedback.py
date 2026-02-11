@@ -148,41 +148,49 @@ class FeedbackDataset(Dataset):
         try:
             # Load audio with soundfile (no torchcodec dependency)
             audio_data, sample_rate = sf.read(str(wav_path))
-            
-            # Convert to torch tensor
-            waveform = torch.from_numpy(audio_data).float()
-            
-            # Ensure shape is (channels, samples)
-            if waveform.dim() == 1:
-                waveform = waveform.unsqueeze(0)  # Add channel dimension
-            elif waveform.dim() == 2:
-                # If stereo (samples, channels), transpose to (channels, samples)
-                if waveform.shape[1] == 2:
-                    waveform = waveform.transpose(0, 1)
-            
-            # Ensure mono
-            if waveform.shape[0] > 1:
-                waveform = waveform.mean(dim=0, keepdim=True)
-            
-            # Resample to 16kHz if needed (with caching)
-            if sample_rate != 16000:
-                if sample_rate not in self.resampler_cache:
-                    self.resampler_cache[sample_rate] = torchaudio.transforms.Resample(sample_rate, 16000)
-                waveform = self.resampler_cache[sample_rate](waveform)
-            
-            # Tokenize text
-            input_ids = self.tokenizer(text, return_tensors="pt").input_ids.squeeze(0)
-            
-            return {
-                "input_ids": input_ids,
-                "waveform": waveform.squeeze(0),
-                "text": text,
-                "filename": wav_path.name
-            }
         except Exception as e:
-            # Print error instead of silently catching
+            # Print error for audio loading failures
             print(f"❌ Error loading audio {wav_path}: {e}")
             raise
+        
+        # Convert to torch tensor
+        waveform = torch.from_numpy(audio_data).float()
+        
+        # Ensure shape is (channels, samples)
+        if waveform.dim() == 1:
+            waveform = waveform.unsqueeze(0)  # Add channel dimension
+        elif waveform.dim() == 2:
+            # soundfile returns (samples, channels) for stereo
+            # We need (channels, samples) format
+            # Only transpose if second dimension is 2 and we have more than 2 samples
+            if waveform.shape[1] == 2 and waveform.shape[0] > 2:
+                waveform = waveform.transpose(0, 1)
+            elif waveform.shape[0] == 2 and waveform.shape[1] > 2:
+                # Already in (channels, samples) format
+                pass
+            else:
+                # For very short audio (<=2 samples), assume mono and reshape
+                waveform = waveform.reshape(1, -1)
+        
+        # Ensure mono
+        if waveform.shape[0] > 1:
+            waveform = waveform.mean(dim=0, keepdim=True)
+        
+        # Resample to 16kHz if needed (with caching)
+        if sample_rate != 16000:
+            if sample_rate not in self.resampler_cache:
+                self.resampler_cache[sample_rate] = torchaudio.transforms.Resample(sample_rate, 16000)
+            waveform = self.resampler_cache[sample_rate](waveform)
+        
+        # Tokenize text
+        input_ids = self.tokenizer(text, return_tensors="pt").input_ids.squeeze(0)
+        
+        return {
+            "input_ids": input_ids,
+            "waveform": waveform.squeeze(0),
+            "text": text,
+            "filename": wav_path.name
+        }
 
 
 def compute_mel_spectrogram(
