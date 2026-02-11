@@ -96,6 +96,9 @@ class FeedbackDataset(Dataset):
         self.feedback_dir = Path(feedback_dir)
         self.tokenizer = tokenizer
         
+        # Cache resampler
+        self.resampler_cache = {}
+        
         # Scan for WAV+TXT pairs
         self.samples = self._scan_feedback_pairs()
         
@@ -147,10 +150,11 @@ class FeedbackDataset(Dataset):
         if waveform.shape[0] > 1:
             waveform = waveform.mean(dim=0, keepdim=True)
         
-        # Resample to 16kHz if needed
+        # Resample to 16kHz if needed (with caching)
         if sample_rate != 16000:
-            resampler = torchaudio.transforms.Resample(sample_rate, 16000)
-            waveform = resampler(waveform)
+            if sample_rate not in self.resampler_cache:
+                self.resampler_cache[sample_rate] = torchaudio.transforms.Resample(sample_rate, 16000)
+            waveform = self.resampler_cache[sample_rate](waveform)
         
         # Tokenize text
         input_ids = self.tokenizer(text, return_tensors="pt").input_ids.squeeze(0)
@@ -171,6 +175,8 @@ def compute_mel_spectrogram(
     n_mels: int = 80
 ) -> torch.Tensor:
     """Compute mel spectrogram from waveform"""
+    # Note: This function should be called with a pre-initialized transform
+    # for better performance during training
     mel_transform = torchaudio.transforms.MelSpectrogram(
         sample_rate=sample_rate,
         n_fft=n_fft,
@@ -182,6 +188,33 @@ def compute_mel_spectrogram(
     mel_spec = torch.log(torch.clamp(mel_spec, min=1e-5))
     
     return mel_spec
+
+
+class MelSpectrogramComputer:
+    """Helper class to compute mel spectrograms with cached transform"""
+    
+    def __init__(
+        self,
+        sample_rate: int = 16000,
+        n_fft: int = 1024,
+        hop_length: int = 256,
+        n_mels: int = 80,
+        device: torch.device = None
+    ):
+        self.mel_transform = torchaudio.transforms.MelSpectrogram(
+            sample_rate=sample_rate,
+            n_fft=n_fft,
+            hop_length=hop_length,
+            n_mels=n_mels
+        )
+        if device is not None:
+            self.mel_transform = self.mel_transform.to(device)
+    
+    def compute(self, waveform: torch.Tensor) -> torch.Tensor:
+        """Compute mel spectrogram from waveform"""
+        mel_spec = self.mel_transform(waveform)
+        mel_spec = torch.log(torch.clamp(mel_spec, min=1e-5))
+        return mel_spec
 
 
 def collate_fn(batch: List[Dict]) -> Dict:
@@ -233,6 +266,9 @@ def train_on_feedback(
     model.train()
     scaler = torch.cuda.amp.GradScaler() if use_fp16 else None
     
+    # Create mel spectrogram computer (cached transform)
+    mel_computer = MelSpectrogramComputer(device=device)
+    
     print(f"\n🚀 Training on feedback for {epochs} epochs...")
     
     for epoch in range(epochs):
@@ -247,10 +283,10 @@ def train_on_feedback(
             attention_mask = batch["attention_mask"].to(device)
             waveforms = batch["waveforms"].to(device)
             
-            # Compute mel spectrograms
+            # Compute mel spectrograms with cached transform
             mel_specs = []
             for waveform in waveforms:
-                mel_spec = compute_mel_spectrogram(waveform)
+                mel_spec = mel_computer.compute(waveform)
                 mel_specs.append(mel_spec)
             
             # Stack mel spectrograms (pad to same length)
