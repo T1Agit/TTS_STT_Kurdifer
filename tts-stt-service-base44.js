@@ -5,7 +5,6 @@
  * for Kurdish, German, French, English, and Turkish languages.
  */
 
-const gtts = require('node-gtts');
 const { encode, decode } = require('./base44');
 const fs = require('fs').promises;
 const path = require('path');
@@ -51,6 +50,18 @@ class TTSSTTServiceBase44 {
      */
     _usesCoquiTTS(langCode) {
         return langCode === 'ku';
+    }
+
+    /**
+     * Check if we should use Python for TTS generation
+     * @private
+     * @param {string} langCode - Language code
+     * @returns {boolean} True if we should use Python
+     */
+    _shouldUsePython(langCode) {
+        // Use Python for all languages for consistency and security
+        // Python's gTTS and Coqui TTS are both available and secure
+        return true;
     }
 
     /**
@@ -150,38 +161,6 @@ except Exception as e:
     }
 
     /**
-     * Generate speech using node-gtts
-     * @private
-     * @param {string} text - Text to convert
-     * @param {string} langCode - Language code
-     * @returns {Promise<Buffer>} Audio buffer
-     */
-    _generateSpeech(text, langCode) {
-        return new Promise((resolve, reject) => {
-            try {
-                const tts = gtts(langCode);
-                const chunks = [];
-                
-                const stream = tts.stream(text);
-                
-                stream.on('data', (chunk) => {
-                    chunks.push(chunk);
-                });
-                
-                stream.on('end', () => {
-                    resolve(Buffer.concat(chunks));
-                });
-                
-                stream.on('error', (error) => {
-                    reject(error);
-                });
-            } catch (error) {
-                reject(error);
-            }
-        });
-    }
-
-    /**
      * Recognize speech from audio buffer
      * @private
      * @param {Buffer} audioBuffer - Audio buffer
@@ -210,15 +189,9 @@ except Exception as e:
             
             console.log(`🎤 Generating speech: '${text.substring(0, 50)}...' in ${langCode}`);
             
-            // Check if we need to use Coqui TTS via Python for Kurdish
-            let audioBuffer;
-            if (this._usesCoquiTTS(langCode)) {
-                // Use Python service with Coqui TTS for Kurdish
-                audioBuffer = await this._generateSpeechPython(text, langCode);
-            } else {
-                // Generate speech using node-gtts for other languages
-                audioBuffer = await this._generateSpeech(text, langCode);
-            }
+            // Use Python service for all languages (more secure and consistent)
+            // Python's gTTS handles non-Kurdish languages, Coqui TTS handles Kurdish
+            const audioBuffer = await this._generateSpeechPython(text, langCode);
             
             // Encode to Base44
             const audioBase44 = encode(audioBuffer);
