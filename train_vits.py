@@ -351,18 +351,18 @@ def train_epoch(
                     
                     # Pad generated mel specs to match target
                     max_gen_mel_len = max(mel.shape[-1] for mel in generated_mel_specs)
-                    max_mel_len = max(max_gen_mel_len, target_mel_specs.shape[-1])
+                    final_max_mel_len = max(max_gen_mel_len, target_mel_specs.shape[-1])
                     
                     generated_mel_specs_padded = []
                     for mel in generated_mel_specs:
-                        pad_len = max_mel_len - mel.shape[-1]
+                        pad_len = final_max_mel_len - mel.shape[-1]
                         mel_padded = F.pad(mel, (0, pad_len), value=0.0)
                         generated_mel_specs_padded.append(mel_padded)
-                    generated_mel_specs = torch.stack(generated_mel_specs_padded)
+                    generated_mel_specs = torch.stack(generated_mel_specs_padded).to(device)
                     
                     # Pad target mel specs if needed
-                    if target_mel_specs.shape[-1] < max_mel_len:
-                        pad_len = max_mel_len - target_mel_specs.shape[-1]
+                    if target_mel_specs.shape[-1] < final_max_mel_len:
+                        pad_len = final_max_mel_len - target_mel_specs.shape[-1]
                         target_mel_specs = F.pad(target_mel_specs, (0, pad_len), value=0.0)
                     
                     # Compute L1 mel reconstruction loss
@@ -393,18 +393,18 @@ def train_epoch(
                 
                 # Pad generated mel specs to match target
                 max_gen_mel_len = max(mel.shape[-1] for mel in generated_mel_specs)
-                max_mel_len = max(max_gen_mel_len, target_mel_specs.shape[-1])
+                final_max_mel_len = max(max_gen_mel_len, target_mel_specs.shape[-1])
                 
                 generated_mel_specs_padded = []
                 for mel in generated_mel_specs:
-                    pad_len = max_mel_len - mel.shape[-1]
+                    pad_len = final_max_mel_len - mel.shape[-1]
                     mel_padded = F.pad(mel, (0, pad_len), value=0.0)
                     generated_mel_specs_padded.append(mel_padded)
-                generated_mel_specs = torch.stack(generated_mel_specs_padded)
+                generated_mel_specs = torch.stack(generated_mel_specs_padded).to(device)
                 
                 # Pad target mel specs if needed
-                if target_mel_specs.shape[-1] < max_mel_len:
-                    pad_len = max_mel_len - target_mel_specs.shape[-1]
+                if target_mel_specs.shape[-1] < final_max_mel_len:
+                    pad_len = final_max_mel_len - target_mel_specs.shape[-1]
                     target_mel_specs = F.pad(target_mel_specs, (0, pad_len), value=0.0)
                 
                 # Compute L1 mel reconstruction loss
