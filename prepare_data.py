@@ -11,6 +11,8 @@ This script:
 """
 
 import os
+os.environ["HF_AUDIO_DECODER"] = "soundfile"
+
 import io
 import argparse
 from pathlib import Path
@@ -247,8 +249,8 @@ def process_and_save_dataset(
             duration = len(audio_data) / target_sr
             total_duration += duration
             
-            # Generate filename
-            filename = f"audio_{idx:06d}.wav"
+            # Generate filename (kmr_XXXXX.wav format)
+            filename = f"kmr_{idx:05d}.wav"
             output_path = wavs_dir / filename
             
             # Save as WAV
@@ -290,6 +292,19 @@ def process_and_save_dataset(
         print(f"Average duration: {total_duration/success_count:.2f} seconds")
     print(f"WAV files saved to: {wavs_dir}")
     print(f"Metadata saved to: {metadata_path}")
+    
+    # Estimate training time
+    if success_count > 0:
+        print("\n⏱️  ESTIMATED TRAINING TIME")
+        # Rough estimates based on typical training:
+        # ~1-2 seconds per sample per epoch on RTX 2070
+        seconds_per_sample = 1.5
+        num_epochs = 10  # Default epochs
+        estimated_seconds = success_count * seconds_per_sample * num_epochs
+        estimated_hours = estimated_seconds / 3600
+        print(f"Estimated time for {num_epochs} epochs: ~{estimated_hours:.1f} hours")
+        print(f"  (Based on ~{seconds_per_sample:.1f}s per sample on RTX 2070 8GB)")
+        print(f"  Actual time may vary based on GPU, batch size, and settings")
     
     # Get speaker stats
     print("\n📊 SPEAKER STATISTICS")
