@@ -387,7 +387,6 @@ def train_on_feedback(
                 
                 total_loss += loss.item()
                 num_batches += 1
-                final_loss = loss.item()
                 
                 progress_bar.set_postfix({"loss": f"{loss.item():.4f}"})
                 

@@ -292,12 +292,12 @@ def train_epoch(
     Train for one epoch
     
     Returns:
-        Tuple of (average loss, number of errors)
+        Tuple of (average loss, number of batch errors in this epoch)
     """
     model.train()
     total_loss = 0.0
     num_batches = 0
-    num_errors = 0
+    num_batch_errors = 0
     
     # Create GradScaler for mixed precision
     scaler = torch.cuda.amp.GradScaler() if use_fp16 else None
@@ -413,13 +413,13 @@ def train_epoch(
             progress_bar.set_postfix({"loss": f"{loss.item() * gradient_accumulation_steps:.4f}"})
             
         except Exception as e:
-            num_errors += 1
-            if num_errors <= 10:  # Print first 10 errors
+            num_batch_errors += 1
+            if num_batch_errors <= 10:  # Print first 10 errors
                 print(f"\n⚠️  Error on batch {batch_idx}: {str(e)[:200]}")
             continue
     
     avg_loss = total_loss / num_batches if num_batches > 0 else 0.0
-    return avg_loss, num_errors
+    return avg_loss, num_batch_errors
 
 
 def save_checkpoint(
@@ -541,7 +541,7 @@ def main():
         print(f"\n📍 Epoch {epoch + 1}/{args.epochs}")
         
         # Train for one epoch
-        avg_loss, num_errors = train_epoch(
+        avg_loss, num_batch_errors = train_epoch(
             model=model,
             dataloader=dataloader,
             optimizer=optimizer,
@@ -551,8 +551,8 @@ def main():
         )
         
         print(f"✅ Epoch {epoch + 1} complete - Average loss: {avg_loss:.4f}")
-        if num_errors > 0:
-            print(f"⚠️  {num_errors} batches had errors and were skipped")
+        if num_batch_errors > 0:
+            print(f"⚠️  {num_batch_errors} batches had errors and were skipped")
         
         # Save checkpoint every 2 epochs
         if (epoch + 1) % 2 == 0:
