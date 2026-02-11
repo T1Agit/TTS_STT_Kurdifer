@@ -28,3 +28,10 @@ training/
 *.pt
 *.pth
 *.ckpt
+
+# Training data and artifacts (additional)
+training/wavs/
+training/checkpoints/
+training/final_model/
+training/feedback/
+training/feedback_model/

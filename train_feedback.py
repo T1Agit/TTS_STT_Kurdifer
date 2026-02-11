@@ -24,7 +24,9 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 import torchaudio
+import soundfile as sf
 from transformers import VitsModel, VitsTokenizer
+import numpy as np
 from tqdm import tqdm
 
 
@@ -143,28 +145,44 @@ class FeedbackDataset(Dataset):
         """Get a single sample"""
         wav_path, text = self.samples[idx]
         
-        # Load audio
-        waveform, sample_rate = torchaudio.load(str(wav_path))
-        
-        # Ensure mono
-        if waveform.shape[0] > 1:
-            waveform = waveform.mean(dim=0, keepdim=True)
-        
-        # Resample to 16kHz if needed (with caching)
-        if sample_rate != 16000:
-            if sample_rate not in self.resampler_cache:
-                self.resampler_cache[sample_rate] = torchaudio.transforms.Resample(sample_rate, 16000)
-            waveform = self.resampler_cache[sample_rate](waveform)
-        
-        # Tokenize text
-        input_ids = self.tokenizer(text, return_tensors="pt").input_ids.squeeze(0)
-        
-        return {
-            "input_ids": input_ids,
-            "waveform": waveform.squeeze(0),
-            "text": text,
-            "filename": wav_path.name
-        }
+        try:
+            # Load audio with soundfile (no torchcodec dependency)
+            audio_data, sample_rate = sf.read(str(wav_path))
+            
+            # Convert to torch tensor
+            waveform = torch.from_numpy(audio_data).float()
+            
+            # Ensure shape is (channels, samples)
+            if waveform.dim() == 1:
+                waveform = waveform.unsqueeze(0)  # Add channel dimension
+            elif waveform.dim() == 2:
+                # If stereo (samples, channels), transpose to (channels, samples)
+                if waveform.shape[1] == 2:
+                    waveform = waveform.transpose(0, 1)
+            
+            # Ensure mono
+            if waveform.shape[0] > 1:
+                waveform = waveform.mean(dim=0, keepdim=True)
+            
+            # Resample to 16kHz if needed (with caching)
+            if sample_rate != 16000:
+                if sample_rate not in self.resampler_cache:
+                    self.resampler_cache[sample_rate] = torchaudio.transforms.Resample(sample_rate, 16000)
+                waveform = self.resampler_cache[sample_rate](waveform)
+            
+            # Tokenize text
+            input_ids = self.tokenizer(text, return_tensors="pt").input_ids.squeeze(0)
+            
+            return {
+                "input_ids": input_ids,
+                "waveform": waveform.squeeze(0),
+                "text": text,
+                "filename": wav_path.name
+            }
+        except Exception as e:
+            # Print error instead of silently catching
+            print(f"❌ Error loading audio {wav_path}: {e}")
+            raise
 
 
 def compute_mel_spectrogram(
