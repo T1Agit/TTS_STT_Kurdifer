@@ -292,69 +292,167 @@ def train_epoch(
     total_loss = 0.0
     num_batches = 0
     
-    # Create GradScaler for mixed precision
-    scaler = torch.cuda.amp.GradScaler() if use_fp16 else None
+    # Create GradScaler for mixed precision with proper initialization
+    scaler = torch.amp.GradScaler("cuda", enabled=use_fp16) if use_fp16 else None
     
     # Create mel spectrogram computer (cached transform)
     mel_computer = MelSpectrogramComputer(device=device)
     
     progress_bar = tqdm(dataloader, desc="Training")
     
+    # Track gradient accumulation
+    optimizer.zero_grad()
+    accumulated_steps = 0
+    
     for batch_idx, batch in enumerate(progress_bar):
-        input_ids = batch["input_ids"].to(device)
-        attention_mask = batch["attention_mask"].to(device)
-        waveforms = batch["waveforms"].to(device)
-        
-        # Compute mel spectrograms with cached transform
-        mel_specs = []
-        for waveform in waveforms:
-            mel_spec = mel_computer.compute(waveform)
-            mel_specs.append(mel_spec)
-        
-        # Stack mel spectrograms (pad to same length)
-        max_mel_len = max(mel.shape[-1] for mel in mel_specs)
-        mel_specs_padded = []
-        for mel in mel_specs:
-            pad_len = max_mel_len - mel.shape[-1]
-            mel_padded = F.pad(mel, (0, pad_len), value=0.0)
-            mel_specs_padded.append(mel_padded)
-        mel_specs = torch.stack(mel_specs_padded).to(device)
-        
-        # Forward pass with mixed precision
-        if use_fp16:
-            with torch.cuda.amp.autocast():
+        try:
+            input_ids = batch["input_ids"].to(device)
+            attention_mask = batch["attention_mask"].to(device)
+            waveforms = batch["waveforms"].to(device)
+            
+            # Compute mel spectrograms with cached transform
+            mel_specs = []
+            for waveform in waveforms:
+                mel_spec = mel_computer.compute(waveform)
+                mel_specs.append(mel_spec)
+            
+            # Stack mel spectrograms (pad to same length)
+            max_mel_len = max(mel.shape[-1] for mel in mel_specs)
+            mel_specs_padded = []
+            for mel in mel_specs:
+                pad_len = max_mel_len - mel.shape[-1]
+                mel_padded = F.pad(mel, (0, pad_len), value=0.0)
+                mel_specs_padded.append(mel_padded)
+            target_mel_specs = torch.stack(mel_specs_padded).to(device)
+            
+            # Forward pass with mixed precision
+            # Note: VITS model's forward() is designed for inference, not training
+            # We need to compute mel reconstruction loss manually
+            if use_fp16:
+                with torch.amp.autocast("cuda"):
+                    # Generate waveform from text
+                    outputs = model(
+                        input_ids=input_ids,
+                        attention_mask=attention_mask
+                    )
+                    
+                    # Get generated waveform
+                    if hasattr(outputs, 'waveform'):
+                        generated_waveform = outputs.waveform
+                    else:
+                        # Fallback: assume outputs is the waveform directly
+                        generated_waveform = outputs
+                    
+                    # Compute mel spectrogram from generated waveform
+                    generated_mel_specs = []
+                    for gen_waveform in generated_waveform:
+                        gen_mel_spec = mel_computer.compute(gen_waveform)
+                        generated_mel_specs.append(gen_mel_spec)
+                    
+                    # Pad generated mel specs to match target
+                    max_gen_mel_len = max(mel.shape[-1] for mel in generated_mel_specs)
+                    max_mel_len = max(max_gen_mel_len, target_mel_specs.shape[-1])
+                    
+                    generated_mel_specs_padded = []
+                    for mel in generated_mel_specs:
+                        pad_len = max_mel_len - mel.shape[-1]
+                        mel_padded = F.pad(mel, (0, pad_len), value=0.0)
+                        generated_mel_specs_padded.append(mel_padded)
+                    generated_mel_specs = torch.stack(generated_mel_specs_padded)
+                    
+                    # Pad target mel specs if needed
+                    if target_mel_specs.shape[-1] < max_mel_len:
+                        pad_len = max_mel_len - target_mel_specs.shape[-1]
+                        target_mel_specs = F.pad(target_mel_specs, (0, pad_len), value=0.0)
+                    
+                    # Compute L1 mel reconstruction loss
+                    loss = F.l1_loss(generated_mel_specs, target_mel_specs)
+                    loss = loss / gradient_accumulation_steps
+                
+                # Backward pass with gradient scaling
+                scaler.scale(loss).backward()
+                accumulated_steps += 1
+            else:
+                # Non-FP16 path
                 outputs = model(
                     input_ids=input_ids,
-                    attention_mask=attention_mask,
-                    labels=mel_specs
+                    attention_mask=attention_mask
                 )
-                loss = outputs.loss / gradient_accumulation_steps
+                
+                # Get generated waveform
+                if hasattr(outputs, 'waveform'):
+                    generated_waveform = outputs.waveform
+                else:
+                    generated_waveform = outputs
+                
+                # Compute mel spectrogram from generated waveform
+                generated_mel_specs = []
+                for gen_waveform in generated_waveform:
+                    gen_mel_spec = mel_computer.compute(gen_waveform)
+                    generated_mel_specs.append(gen_mel_spec)
+                
+                # Pad generated mel specs to match target
+                max_gen_mel_len = max(mel.shape[-1] for mel in generated_mel_specs)
+                max_mel_len = max(max_gen_mel_len, target_mel_specs.shape[-1])
+                
+                generated_mel_specs_padded = []
+                for mel in generated_mel_specs:
+                    pad_len = max_mel_len - mel.shape[-1]
+                    mel_padded = F.pad(mel, (0, pad_len), value=0.0)
+                    generated_mel_specs_padded.append(mel_padded)
+                generated_mel_specs = torch.stack(generated_mel_specs_padded)
+                
+                # Pad target mel specs if needed
+                if target_mel_specs.shape[-1] < max_mel_len:
+                    pad_len = max_mel_len - target_mel_specs.shape[-1]
+                    target_mel_specs = F.pad(target_mel_specs, (0, pad_len), value=0.0)
+                
+                # Compute L1 mel reconstruction loss
+                loss = F.l1_loss(generated_mel_specs, target_mel_specs)
+                loss = loss / gradient_accumulation_steps
+                loss.backward()
+                accumulated_steps += 1
             
-            # Backward pass with gradient scaling
-            scaler.scale(loss).backward()
-        else:
-            outputs = model(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                labels=mel_specs
-            )
-            loss = outputs.loss / gradient_accumulation_steps
-            loss.backward()
-        
-        # Update weights after accumulation
-        if (batch_idx + 1) % gradient_accumulation_steps == 0:
-            if use_fp16:
-                scaler.step(optimizer)
-                scaler.update()
+            # Update weights after accumulation - only if we have valid gradients
+            if accumulated_steps >= gradient_accumulation_steps:
+                if use_fp16:
+                    scaler.step(optimizer)
+                    scaler.update()
+                else:
+                    optimizer.step()
+                optimizer.zero_grad()
+                accumulated_steps = 0
+            
+            total_loss += loss.item() * gradient_accumulation_steps
+            num_batches += 1
+            
+            # Update progress bar
+            progress_bar.set_postfix({"loss": f"{loss.item() * gradient_accumulation_steps:.4f}"})
+            
+        except RuntimeError as e:
+            # Handle OOM and other GPU errors
+            if "out of memory" in str(e).lower():
+                print(f"\n⚠️  OOM error at batch {batch_idx}, clearing cache and skipping...")
+                torch.cuda.empty_cache()
+                # Skip this batch but continue training
+                continue
             else:
-                optimizer.step()
-            optimizer.zero_grad()
-        
-        total_loss += loss.item() * gradient_accumulation_steps
-        num_batches += 1
-        
-        # Update progress bar
-        progress_bar.set_postfix({"loss": f"{loss.item() * gradient_accumulation_steps:.4f}"})
+                # Re-raise other RuntimeErrors
+                print(f"\n❌ RuntimeError at batch {batch_idx}: {e}")
+                raise
+        except Exception as e:
+            # Log other exceptions but continue
+            print(f"\n⚠️  Error at batch {batch_idx}: {e}")
+            continue
+    
+    # Final step if there are remaining accumulated gradients
+    if accumulated_steps > 0:
+        if use_fp16:
+            scaler.step(optimizer)
+            scaler.update()
+        else:
+            optimizer.step()
+        optimizer.zero_grad()
     
     return total_loss / num_batches if num_batches > 0 else 0.0
 
