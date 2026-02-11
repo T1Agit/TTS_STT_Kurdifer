@@ -135,9 +135,17 @@ pip install -r requirements.txt
 **Dependencies include:**
 - `gTTS` - Google Text-to-Speech (for English, German, French, Turkish)
 - `coqui-tts` - XTTS v2 model (for Kurdish with high-quality voice synthesis)
+- `torch>=2.0.0,<2.5.0` - PyTorch deep learning framework (required by XTTS v2)
+- `torchaudio>=2.0.0,<2.5.0` - Audio processing library (required by XTTS v2)
+- `transformers>=4.33.0,<5.0.0` - Hugging Face transformers (required by XTTS v2)
 - `flask` + `flask-cors` - API server
 - `pydub` - Audio processing
 - Other utilities
+
+**Version Constraints Rationale:**
+- **PyTorch & torchaudio 2.0.0-2.5.0**: XTTS v2 requires PyTorch 2.x for optimal performance. Version 2.5.0+ may introduce breaking changes.
+- **transformers 4.33.0-5.0.0**: XTTS v2 depends on Hugging Face transformers 4.33+. Version 5.0.0+ has incompatible API changes.
+- These constraints prevent installation and runtime failures with Coqui TTS XTTS v2 model.
 
 #### 3. Install Node.js Dependencies (Optional - for Node.js API)
 ```bash
@@ -152,12 +160,25 @@ npm install
 python setup_kurdish_tts.py
 ```
 
+**For automated/CI installations:**
+```bash
+# Set this environment variable to automatically accept Coqui TOS
+export COQUI_TOS_AGREED=1
+python setup_kurdish_tts.py
+```
+
 **What this does:**
 - ✅ Checks if Coqui TTS is installed
 - ✅ Downloads XTTS v2 multilingual model (~2GB)
 - ✅ Caches model for future use (subsequent runs are fast)
 - ✅ Tests Kurdish TTS generation
 - ⏱️ Takes 2-5 minutes depending on your internet speed
+
+**COQUI_TOS_AGREED Environment Variable:**
+- Required for automated installations in CI/CD pipelines
+- Automatically accepts Coqui AI's Terms of Service
+- Use only if you have read and agree to [Coqui AI's Terms of Service](https://coqui.ai/cpml)
+- Example: `COQUI_TOS_AGREED=1 python setup_kurdish_tts.py`
 
 **Manual verification:**
 ```bash
@@ -251,6 +272,45 @@ TTS_STT_Kurdifer/
 ---
 
 ## 🐛 Troubleshooting
+
+### PyTorch and Transformers Issues
+
+**Problem:** "RuntimeError: Tensors must be CUDA and dense" or PyTorch version incompatibility
+```bash
+# Solution: Ensure PyTorch version is compatible with XTTS v2
+pip install "torch>=2.0.0,<2.5.0" "torchaudio>=2.0.0,<2.5.0"
+
+# Check your installation
+python -c "import torch; print(f'PyTorch version: {torch.__version__}')"
+```
+
+**Problem:** "ImportError: cannot import name 'PreTrainedModel'" or transformers errors
+```bash
+# Solution: Install compatible transformers version
+pip install "transformers>=4.33.0,<5.0.0"
+
+# Check your installation
+python -c "import transformers; print(f'Transformers version: {transformers.__version__}')"
+```
+
+**Problem:** Version conflicts during installation
+```bash
+# Solution: Clean install with version constraints
+pip uninstall torch torchaudio transformers coqui-tts -y
+pip install -r requirements.txt
+
+# Or use virtual environment for clean installation
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+**Problem:** "CUDA out of memory" or GPU-related errors
+```bash
+# Solution: XTTS v2 can run on CPU, though slower
+# PyTorch will automatically use CPU if CUDA is unavailable
+# No special configuration needed - CPU inference works by default
+```
 
 ### Kurdish TTS Issues
 
@@ -409,7 +469,14 @@ Base44 is a custom encoding scheme that:
 PORT=8080                    # Server port
 FLASK_ENV=production         # Flask environment
 MAX_TEXT_LENGTH=500          # Max characters per request
+COQUI_TOS_AGREED=1          # Auto-accept Coqui TOS (for CI/automated setups)
 ```
+
+**COQUI_TOS_AGREED:**
+- Set to `1` to automatically accept Coqui AI's Terms of Service during model download
+- Required for automated/CI installations where interactive prompts cannot be answered
+- Only use if you have read and agree to [Coqui AI's Terms](https://coqui.ai/cpml)
+- Optional for manual installations (will prompt interactively if not set)
 
 ---
 
