@@ -141,12 +141,13 @@ This will:
 
 ### Sample Texts
 
+Expected output format from `prepare_data.py`:
 ```
-0: 2.88s - Em ê nebin.
-1: 3.89s - Ez vê li xwe mikur tînim
-2: 4.64s - Min dengekî lêdanê ji derî bihîst.
-3: 4.21s - Dema ez zarok bûm ez qet bi fransî neaxivîm.
-4: 2.16s - Rojbûna te pîroz be
+kmr_00000.wav|Em ê nebin.
+kmr_00001.wav|Ez vê li xwe mikur tînim
+kmr_00002.wav|Min dengekî lêdanê ji derî bihîst.
+kmr_00003.wav|Dema ez zarok bûm ez qet bi fransî neaxivîm.
+kmr_00004.wav|Rojbûna te pîroz be
 ```
 
 ## Model Information
@@ -201,8 +202,8 @@ If you encounter OOM errors:
 ```
 training/
 ├── wavs/                    # Processed WAV files (16kHz mono)
-│   ├── audio_000000.wav
-│   ├── audio_000001.wav
+│   ├── kmr_00000.wav
+│   ├── kmr_00001.wav
 │   └── ...
 ├── metadata.csv             # Training metadata (filename|text)
 ├── checkpoints/             # Training checkpoints
@@ -231,14 +232,19 @@ training/
 The scripts use a soundfile-based workaround for Windows (torchcodec is broken on Windows):
 
 ```python
+# Set environment variable before loading datasets
+os.environ["HF_AUDIO_DECODER"] = "soundfile"
+
+# Load dataset
 ds = load_dataset("amedcj/kurmanji-commonvoice", split="train")
 ds = ds.cast_column("path", Audio(decode=False))  # Get raw bytes
-# Then decode manually:
+
+# Decode manually with soundfile:
 audio_bytes = sample["path"]["bytes"]
 audio_data, sr = sf.read(io.BytesIO(audio_bytes))
 ```
 
-This solution is **confirmed working** on Windows machines.
+This solution is **confirmed working** on Windows machines (Python 3.14, PyTorch 2.10.0+cu128, RTX 2070 8GB).
 
 ## Integration with Base44 App
 
