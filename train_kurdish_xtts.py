@@ -2,16 +2,16 @@
 """
 XTTS v2 Fine-Tuning Script for Kurdish (Kurmanji)
 
-This script fine-tunes the XTTS v2 multilingual model on Kurdish Common Voice data
-to add proper Kurdish language support.
+This script actually fine-tunes the XTTS v2 multilingual model on Kurdish Common Voice data
+using Coqui TTS's built-in fine-tuning API.
 
 Requirements:
 - Mozilla Common Voice Kurdish corpus (cv-corpus-24.0-2025-12-05-kmr)
 - 8GB+ VRAM (RTX 2070 or better)
 - ~20GB disk space for processed data
+- Coqui TTS 0.27.5+ with all dependencies
 
-Dataset: Mozilla Common Voice Kurdish (Kurmanji)
-https://datacollective.mozillafoundation.org/datasets/cmj8u3pbq00dtnxxbz4yoxc4i
+Dataset: Mozilla Common Voice Kurdish (Kurmanji) v24.0
 """
 
 import os
@@ -21,24 +21,25 @@ import argparse
 import pandas as pd
 import numpy as np
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 import shutil
+from datetime import datetime
 
 # Audio processing
 import librosa
 import soundfile as sf
+from tqdm import tqdm
 
 # Deep learning
 import torch
-from torch.utils.data import Dataset, DataLoader
 
 print("=" * 80)
 print("XTTS v2 Fine-Tuning for Kurdish (Kurmanji)")
 print("=" * 80)
 
 
-class CommonVoiceKurdishDataset:
-    """Handler for Mozilla Common Voice Kurdish dataset"""
+class CommonVoiceDataPreparation:
+    """Handler for Mozilla Common Voice Kurdish dataset preparation"""
     
     def __init__(self, corpus_path: str, output_dir: str):
         """
@@ -46,13 +47,13 @@ class CommonVoiceKurdishDataset:
         
         Args:
             corpus_path: Path to Common Voice corpus directory
-                        (e.g., cv-corpus-24.0-2025-12-05-kmr/cv-corpus-24.0-2025-12-05/kmr/)
             output_dir: Directory to save processed audio files
         """
         self.corpus_path = Path(corpus_path)
         self.clips_dir = self.corpus_path / "clips"
         self.output_dir = Path(output_dir)
-        self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.wavs_dir = self.output_dir / "wavs"
+        self.wavs_dir.mkdir(parents=True, exist_ok=True)
         
         # Check if corpus exists
         if not self.corpus_path.exists():
@@ -71,15 +72,7 @@ class CommonVoiceKurdishDataset:
         print(f"✅ Found clips at: {self.clips_dir}")
     
     def load_tsv(self, tsv_name: str = "validated.tsv") -> pd.DataFrame:
-        """
-        Load and parse Common Voice TSV file
-        
-        Args:
-            tsv_name: Name of TSV file (validated.tsv, train.tsv, dev.tsv, test.tsv)
-            
-        Returns:
-            DataFrame with columns: client_id, path, sentence, up_votes, down_votes, etc.
-        """
+        """Load and parse Common Voice TSV file"""
         tsv_path = self.corpus_path / tsv_name
         
         if not tsv_path.exists():
@@ -95,23 +88,9 @@ class CommonVoiceKurdishDataset:
         self,
         df: pd.DataFrame,
         min_upvotes: int = 2,
-        max_downvotes: int = 0,
-        min_duration: float = 2.0,
-        max_duration: float = 15.0
+        max_downvotes: int = 0
     ) -> pd.DataFrame:
-        """
-        Filter clips for quality
-        
-        Args:
-            df: DataFrame from load_tsv()
-            min_upvotes: Minimum upvotes required
-            max_downvotes: Maximum downvotes allowed
-            min_duration: Minimum audio duration in seconds
-            max_duration: Maximum audio duration in seconds
-            
-        Returns:
-            Filtered DataFrame
-        """
+        """Filter clips for quality"""
         print("\n🔍 Filtering for quality...")
         initial_count = len(df)
         
@@ -123,10 +102,6 @@ class CommonVoiceKurdishDataset:
             ]
             print(f"   After vote filtering: {len(df)} clips ({len(df)/initial_count*100:.1f}%)")
         
-        # Filter by duration (if available in TSV)
-        # Note: Some Common Voice versions don't include duration in TSV
-        # We'll check duration during audio processing instead
-        
         # Remove entries with missing sentence
         df = df.dropna(subset=['sentence'])
         df = df[df['sentence'].str.strip() != '']
@@ -137,70 +112,60 @@ class CommonVoiceKurdishDataset:
     def process_audio_file(
         self,
         audio_path: Path,
-        target_sr: int = 22050,
-        min_duration: float = 2.0,
-        max_duration: float = 15.0
-    ) -> Tuple[np.ndarray, int, bool]:
+        output_path: Path,
+        target_sr: int = 22050
+    ) -> Tuple[bool, float]:
         """
-        Load and process audio file
+        Load and process audio file, converting MP3 to WAV
         
-        Args:
-            audio_path: Path to MP3 audio file
-            target_sr: Target sample rate (22050 for XTTS v2)
-            min_duration: Minimum duration in seconds
-            max_duration: Maximum duration in seconds
-            
         Returns:
-            Tuple of (audio_array, sample_rate, is_valid)
+            Tuple of (success, duration)
         """
         try:
+            # Skip if already processed
+            if output_path.exists():
+                audio, sr = librosa.load(str(output_path), sr=target_sr, mono=True)
+                duration = len(audio) / sr
+                return True, duration
+            
             # Load audio with librosa (handles MP3 files)
             audio, sr = librosa.load(str(audio_path), sr=target_sr, mono=True)
             
-            # Check duration
+            # Check duration (2-15 seconds is good for training)
             duration = len(audio) / sr
-            if duration < min_duration or duration > max_duration:
-                return None, sr, False
+            if duration < 2.0 or duration > 15.0:
+                return False, duration
             
             # Normalize audio
             audio = librosa.util.normalize(audio)
             
-            return audio, sr, True
+            # Save as WAV
+            sf.write(output_path, audio, sr)
+            
+            return True, duration
             
         except Exception as e:
-            print(f"   ⚠️  Error processing {audio_path.name}: {e}")
-            return None, target_sr, False
+            return False, 0.0
     
     def prepare_training_data(
         self,
         df: pd.DataFrame,
         target_sr: int = 22050,
-        min_duration: float = 2.0,
-        max_duration: float = 15.0,
-        max_samples: int = None
-    ) -> List[Dict[str, str]]:
+        max_samples: Optional[int] = None
+    ) -> List[Tuple[str, str, str]]:
         """
         Process and prepare training data
         
-        Args:
-            df: Filtered DataFrame
-            target_sr: Target sample rate
-            min_duration: Minimum audio duration
-            max_duration: Maximum audio duration
-            max_samples: Maximum number of samples to process (None for all)
-            
         Returns:
-            List of dicts with 'audio_path' and 'text' keys
+            List of tuples (wav_path, text, speaker_id)
         """
         print("\n🔄 Processing audio files...")
         
         processed_data = []
-        total = len(df) if max_samples is None else min(len(df), max_samples)
+        total = len(df) if max_samples is None or max_samples == 0 else min(len(df), max_samples)
         
-        for idx, row in df.head(total).iterrows():
-            if idx % 100 == 0:
-                print(f"   Progress: {idx}/{total} ({idx/total*100:.1f}%)")
-            
+        # Use tqdm for progress bar
+        for idx, row in tqdm(df.head(total).iterrows(), total=total, desc="Processing audio"):
             # Get audio file path
             audio_filename = row['path']
             audio_path = self.clips_dir / audio_filename
@@ -208,146 +173,287 @@ class CommonVoiceKurdishDataset:
             if not audio_path.exists():
                 continue
             
-            # Process audio
-            audio, sr, is_valid = self.process_audio_file(
-                audio_path, target_sr, min_duration, max_duration
-            )
+            # Output WAV path
+            wav_filename = audio_filename.replace('.mp3', '.wav')
+            output_path = self.wavs_dir / wav_filename
             
-            if not is_valid or audio is None:
+            # Process audio
+            success, duration = self.process_audio_file(audio_path, output_path, target_sr)
+            
+            if not success:
                 continue
             
-            # Save processed audio as WAV
-            output_filename = audio_filename.replace('.mp3', '.wav')
-            output_path = self.output_dir / output_filename
-            
-            sf.write(output_path, audio, sr)
-            
             # Add to training data
-            processed_data.append({
-                'audio_path': str(output_path),
-                'text': row['sentence'].strip(),
-                'speaker_id': row.get('client_id', 'unknown')
-            })
+            # Format: (wav_path, text, speaker_id)
+            processed_data.append((
+                str(output_path.relative_to(self.output_dir)),
+                row['sentence'].strip(),
+                row.get('client_id', 'unknown')
+            ))
         
         print(f"\n✅ Processed {len(processed_data)} valid audio clips")
         return processed_data
+    
+    def create_metadata_file(self, processed_data: List[Tuple[str, str, str]]) -> str:
+        """
+        Create metadata file in LJSpeech format
+        
+        Format: wavs/filename|text|text
+        
+        Returns:
+            Path to metadata file
+        """
+        metadata_path = self.output_dir / "metadata.csv"
+        
+        print(f"\n📝 Creating metadata file: {metadata_path}")
+        
+        with open(metadata_path, 'w', encoding='utf-8') as f:
+            for wav_path, text, speaker_id in processed_data:
+                # LJSpeech format: wavs/filename|text|text
+                f.write(f"{wav_path}|{text}|{text}\n")
+        
+        print(f"✅ Created metadata with {len(processed_data)} entries")
+        return str(metadata_path)
 
 
-class XTTSv2Trainer:
+class XTTSv2FineTuner:
     """XTTS v2 fine-tuning trainer for Kurdish"""
     
     def __init__(
         self,
         output_model_dir: str = "models/kurdish",
-        base_model: str = "tts_models/multilingual/multi-dataset/xtts_v2"
+        language: str = "ku"
     ):
         """
-        Initialize trainer
+        Initialize fine-tuning trainer
         
         Args:
             output_model_dir: Directory to save fine-tuned model
-            base_model: Base XTTS v2 model name
+            language: Target language code
         """
         self.output_model_dir = Path(output_model_dir)
         self.output_model_dir.mkdir(parents=True, exist_ok=True)
-        self.base_model = base_model
+        self.checkpoint_dir = self.output_model_dir / "checkpoints"
+        self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        self.language = language
         
         # Check CUDA availability
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         print(f"\n🖥️  Device: {self.device}")
         
         if self.device == "cuda":
-            print(f"   GPU: {torch.cuda.get_device_name(0)}")
-            print(f"   VRAM: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.1f} GB")
+            gpu_name = torch.cuda.get_device_name(0)
+            vram = torch.cuda.get_device_properties(0).total_memory / 1024**3
+            print(f"   GPU: {gpu_name}")
+            print(f"   VRAM: {vram:.1f} GB")
+            
+            if vram < 7.5:
+                print(f"   ⚠️  Warning: Low VRAM detected. Training may be slow or fail.")
+                print(f"   ℹ️  Consider using smaller batch size or gradient accumulation")
         else:
             print("   ⚠️  No GPU detected. Training on CPU will be very slow.")
     
-    def load_base_model(self):
-        """Load base XTTS v2 model"""
+    def download_base_model(self):
+        """Download base XTTS v2 model"""
         try:
-            from TTS.api import TTS
+            from TTS.utils.manage import ModelManager
             
-            print(f"\n🔧 Loading base model: {self.base_model}")
-            self.tts = TTS(
-                model_name=self.base_model,
-                progress_bar=True,
-                gpu=(self.device == "cuda")
-            )
-            print("✅ Base model loaded")
+            print(f"\n🔧 Downloading base XTTS v2 model...")
+            manager = ModelManager()
+            model_path = manager.download_model("tts_models/multilingual/multi-dataset/xtts_v2")
+            print(f"✅ Base model downloaded to: {model_path}")
+            return model_path
             
         except Exception as e:
-            print(f"❌ Error loading base model: {e}")
+            print(f"❌ Error downloading base model: {e}")
             raise
     
     def train(
         self,
-        training_data: List[Dict[str, str]],
-        epochs: int = 10,
+        dataset_path: str,
+        metadata_file: str,
+        num_epochs: int = 10,
         batch_size: int = 2,
-        learning_rate: float = 1e-5,
-        checkpoint_interval: int = 2
+        grad_accum_steps: int = 16,
+        learning_rate: float = 5e-6,
+        save_step: int = 1000,
+        resume: bool = False
     ):
         """
-        Prepare training data and save manifests
-        
-        NOTE: This method prepares data for fine-tuning but does not perform
-        actual training. For actual XTTS v2 fine-tuning, you would need to:
-        1. Use Coqui TTS official fine-tuning recipes
-        2. Or implement training using the GPT_train() method
-        3. This script validates data and creates training manifests
+        Fine-tune XTTS v2 model on Kurdish data
         
         Args:
-            training_data: List of dicts with 'audio_path' and 'text'
-            epochs: Number of training epochs (for future use)
-            batch_size: Batch size (for future use)
-            learning_rate: Learning rate (for future use)
-            checkpoint_interval: Save checkpoint every N epochs (for future use)
+            dataset_path: Path to processed dataset directory
+            metadata_file: Path to metadata.csv file
+            num_epochs: Number of training epochs
+            batch_size: Batch size (keep small for 8GB VRAM)
+            grad_accum_steps: Gradient accumulation steps
+            learning_rate: Learning rate for fine-tuning
+            save_step: Save checkpoint every N steps
+            resume: Whether to resume from last checkpoint
         """
-        print("\n" + "=" * 80)
-        print("Data Preparation Complete")
-        print("=" * 80)
-        print(f"Training samples: {len(training_data)}")
-        print(f"Target epochs: {epochs}")
-        print(f"Target batch size: {batch_size}")
-        print(f"Target learning rate: {learning_rate}")
-        
-        # NOTE: XTTS v2 fine-tuning requires the TTS.tts.configs.xtts_config module
-        # and specific training scripts from Coqui TTS repository.
-        # 
-        # For a production implementation, you would need to:
-        # 1. Use the official XTTS fine-tuning recipe from Coqui TTS
-        # 2. Or use the trainer.GPT_train() method if available
-        # 3. Configure the model for Kurdish language
-        #
-        # This script prepares and validates your data as the first step.
-        
-        print("\n⚠️  Important Notes:")
-        print("   • This script prepares your data for fine-tuning")
-        print("   • Actual XTTS v2 fine-tuning requires additional implementation")
-        print("   • For immediate use, the service falls back to voice cloning")
-        print("   • Voice cloning with Turkish phonetics works without training")
-        
-        # Save training data manifest
-        manifest_path = self.output_model_dir / "training_manifest.json"
-        with open(manifest_path, 'w', encoding='utf-8') as f:
-            json.dump(training_data, f, indent=2, ensure_ascii=False)
-        print(f"\n✅ Saved training manifest to: {manifest_path}")
-        
-        # Save a simple config
-        config = {
-            "language": "ku",
-            "model_type": "xtts_v2_prepared",
-            "base_model": self.base_model,
-            "training_samples": len(training_data),
-            "target_epochs": epochs,
-            "target_batch_size": batch_size,
-            "target_learning_rate": learning_rate,
-            "status": "data_prepared"
-        }
-        config_path = self.output_model_dir / "config.json"
-        with open(config_path, 'w', encoding='utf-8') as f:
-            json.dump(config, f, indent=2)
-        print(f"✅ Saved config to: {config_path}")
+        try:
+            from TTS.tts.configs.xtts_config import XttsConfig
+            from TTS.tts.models.xtts import Xtts, XttsArgs
+            from TTS.config.shared_configs import BaseDatasetConfig
+            from TTS.tts.datasets import load_tts_samples
+            from trainer import Trainer, TrainerArgs
+            
+            print("\n" + "=" * 80)
+            print("Starting XTTS v2 Fine-Tuning")
+            print("=" * 80)
+            
+            # Step 1: Download base model
+            base_model_path = self.download_base_model()
+            
+            # Step 2: Configure dataset
+            print("\n📊 Configuring dataset...")
+            dataset_config = BaseDatasetConfig(
+                formatter="ljspeech",
+                meta_file_train=metadata_file,
+                path=dataset_path,
+                language=self.language
+            )
+            
+            # Step 3: Load training samples
+            print("📚 Loading training samples...")
+            train_samples, eval_samples = load_tts_samples(
+                dataset_config,
+                eval_split=True,
+                eval_split_max_size=0.1,
+                eval_split_size=0.1
+            )
+            
+            print(f"   Train samples: {len(train_samples)}")
+            print(f"   Eval samples: {len(eval_samples)}")
+            
+            # Step 4: Configure XTTS model
+            print("\n🔧 Configuring XTTS model...")
+            config = XttsConfig()
+            config.load_json(os.path.join(base_model_path, "config.json"))
+            
+            # Update config for fine-tuning
+            config.batch_size = batch_size
+            config.grad_accum_steps = grad_accum_steps
+            config.num_epochs = num_epochs
+            config.save_step = save_step
+            config.print_step = 100
+            config.plot_step = 500
+            config.log_model_step = 1000
+            config.lr = learning_rate
+            config.use_grad_scaler = True  # Use mixed precision (fp16)
+            
+            # Configure for Kurdish
+            config.languages = config.languages if hasattr(config, 'languages') else []
+            if self.language not in config.languages:
+                config.languages.append(self.language)
+            
+            # Save config
+            config_path = self.output_model_dir / "config.json"
+            config.save_json(str(config_path))
+            print(f"✅ Config saved to: {config_path}")
+            
+            # Step 5: Initialize model
+            print("\n🏗️  Initializing model...")
+            model = Xtts.init_from_config(config)
+            model.load_checkpoint(config, checkpoint_dir=base_model_path, eval=False)
+            
+            # Move to device
+            if self.device == "cuda":
+                model = model.cuda()
+            
+            # Step 6: Configure trainer
+            print("\n🎯 Configuring trainer...")
+            trainer_args = TrainerArgs()
+            trainer_args.restore_path = None
+            trainer_args.skip_train_epoch = False
+            trainer_args.use_accelerate = True  # Use accelerate for better performance
+            
+            # Check for resume
+            if resume:
+                checkpoints = list(self.checkpoint_dir.glob("checkpoint_*.pth"))
+                if checkpoints:
+                    latest_checkpoint = max(checkpoints, key=lambda x: int(x.stem.split('_')[1]))
+                    trainer_args.restore_path = str(latest_checkpoint)
+                    print(f"   ℹ️  Resuming from: {latest_checkpoint}")
+                else:
+                    print(f"   ⚠️  No checkpoints found to resume from")
+            
+            # Step 7: Initialize trainer
+            trainer = Trainer(
+                args=trainer_args,
+                config=config,
+                output_path=str(self.output_model_dir),
+                model=model,
+                train_samples=train_samples,
+                eval_samples=eval_samples
+            )
+            
+            # Step 8: Start training
+            print("\n" + "=" * 80)
+            print("🚀 Starting Training...")
+            print("=" * 80)
+            print(f"   Epochs: {num_epochs}")
+            print(f"   Batch size: {batch_size}")
+            print(f"   Gradient accumulation: {grad_accum_steps}")
+            print(f"   Effective batch size: {batch_size * grad_accum_steps}")
+            print(f"   Learning rate: {learning_rate}")
+            print(f"   Save every: {save_step} steps")
+            print(f"   Device: {self.device}")
+            print("=" * 80)
+            
+            # Create training log
+            log_file = self.output_model_dir / "training_log.txt"
+            with open(log_file, 'a', encoding='utf-8') as f:
+                f.write(f"\n{'=' * 80}\n")
+                f.write(f"Training started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write(f"Train samples: {len(train_samples)}\n")
+                f.write(f"Eval samples: {len(eval_samples)}\n")
+                f.write(f"Epochs: {num_epochs}\n")
+                f.write(f"Batch size: {batch_size}\n")
+                f.write(f"Gradient accumulation: {grad_accum_steps}\n")
+                f.write(f"Learning rate: {learning_rate}\n")
+                f.write(f"{'=' * 80}\n")
+            
+            # Run training
+            trainer.fit()
+            
+            # Step 9: Save final model
+            print("\n💾 Saving final model...")
+            final_model_path = self.output_model_dir / "best_model.pth"
+            torch.save(model.state_dict(), final_model_path)
+            print(f"✅ Final model saved to: {final_model_path}")
+            
+            # Save speakers embedding if exists
+            if hasattr(model, 'speaker_manager') and model.speaker_manager is not None:
+                speakers_path = self.output_model_dir / "speakers.pth"
+                torch.save(model.speaker_manager.speaker_embeddings, speakers_path)
+                print(f"✅ Speaker embeddings saved to: {speakers_path}")
+            
+            # Update training log
+            with open(log_file, 'a', encoding='utf-8') as f:
+                f.write(f"Training completed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write(f"Final model: {final_model_path}\n")
+            
+            print("\n" + "=" * 80)
+            print("✅ Fine-Tuning Complete!")
+            print("=" * 80)
+            
+        except ImportError as e:
+            print(f"\n❌ Import Error: {e}")
+            print("\n⚠️  Required modules not available.")
+            print("   This script requires Coqui TTS with Trainer support.")
+            print("   Please ensure you have installed:")
+            print("   - TTS>=0.27.5")
+            print("   - trainer (from Coqui TTS)")
+            print("\n   Installation:")
+            print("   pip install TTS>=0.27.5")
+            raise
+        except Exception as e:
+            print(f"\n❌ Training Error: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
 
 
 def main():
@@ -382,8 +488,8 @@ def main():
     parser.add_argument(
         "--max_samples",
         type=int,
-        default=None,
-        help="Maximum number of samples to process (None for all)"
+        default=500,
+        help="Maximum number of samples to process (0 for all, default: 500 for quick test)"
     )
     parser.add_argument(
         "--epochs",
@@ -397,98 +503,131 @@ def main():
         default=2,
         help="Batch size (keep small for 8GB VRAM)"
     )
+    parser.add_argument(
+        "--grad_accum_steps",
+        type=int,
+        default=16,
+        help="Gradient accumulation steps (to compensate for small batch size)"
+    )
+    parser.add_argument(
+        "--learning_rate",
+        type=float,
+        default=5e-6,
+        help="Learning rate for fine-tuning"
+    )
+    parser.add_argument(
+        "--save_step",
+        type=int,
+        default=1000,
+        help="Save checkpoint every N steps"
+    )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume training from last checkpoint"
+    )
     
     args = parser.parse_args()
+    
+    # Convert max_samples=0 to None (all samples)
+    max_samples = None if args.max_samples == 0 else args.max_samples
     
     print("\n📋 Configuration:")
     print(f"   Corpus path: {args.corpus_path}")
     print(f"   Output dir: {args.output_dir}")
     print(f"   Model dir: {args.model_dir}")
     print(f"   TSV file: {args.tsv_file}")
-    print(f"   Max samples: {args.max_samples or 'All'}")
+    print(f"   Max samples: {max_samples or 'All'}")
     print(f"   Epochs: {args.epochs}")
     print(f"   Batch size: {args.batch_size}")
+    print(f"   Gradient accumulation: {args.grad_accum_steps}")
+    print(f"   Effective batch size: {args.batch_size * args.grad_accum_steps}")
+    print(f"   Learning rate: {args.learning_rate}")
+    print(f"   Save step: {args.save_step}")
+    print(f"   Resume: {args.resume}")
     
-    # Step 1: Load and prepare dataset
+    # Step 1: Prepare dataset
     print("\n" + "=" * 80)
-    print("STEP 1: Loading Dataset")
+    print("STEP 1: Data Preparation")
     print("=" * 80)
     
-    dataset = CommonVoiceKurdishDataset(
+    data_prep = CommonVoiceDataPreparation(
         corpus_path=args.corpus_path,
         output_dir=args.output_dir
     )
     
     # Load TSV
-    df = dataset.load_tsv(args.tsv_file)
+    df = data_prep.load_tsv(args.tsv_file)
     
     # Filter for quality
-    df = dataset.filter_quality_clips(
+    df = data_prep.filter_quality_clips(
         df,
         min_upvotes=2,
-        max_downvotes=0,
-        min_duration=2.0,
-        max_duration=15.0
+        max_downvotes=0
     )
     
     # Process audio files
-    training_data = dataset.prepare_training_data(
+    processed_data = data_prep.prepare_training_data(
         df,
         target_sr=22050,
-        min_duration=2.0,
-        max_duration=15.0,
-        max_samples=args.max_samples
+        max_samples=max_samples
     )
     
-    if len(training_data) == 0:
+    if len(processed_data) == 0:
         print("\n❌ No valid training data found!")
         print("   Please check your corpus path and TSV file.")
         return 1
     
-    # Step 2: Initialize trainer
+    # Create metadata file
+    metadata_file = data_prep.create_metadata_file(processed_data)
+    
+    # Step 2: Fine-tune model
     print("\n" + "=" * 80)
-    print("STEP 2: Initializing Trainer")
+    print("STEP 2: Fine-Tuning XTTS v2")
     print("=" * 80)
     
-    trainer = XTTSv2Trainer(output_model_dir=args.model_dir)
-    
-    # Load base model
-    trainer.load_base_model()
-    
-    # Step 3: Train (prepare data for training)
-    print("\n" + "=" * 80)
-    print("STEP 3: Data Preparation")
-    print("=" * 80)
+    trainer = XTTSv2FineTuner(
+        output_model_dir=args.model_dir,
+        language="ku"
+    )
     
     trainer.train(
-        training_data=training_data,
-        epochs=args.epochs,
+        dataset_path=args.output_dir,
+        metadata_file=metadata_file,
+        num_epochs=args.epochs,
         batch_size=args.batch_size,
-        learning_rate=1e-5,
-        checkpoint_interval=2
+        grad_accum_steps=args.grad_accum_steps,
+        learning_rate=args.learning_rate,
+        save_step=args.save_step,
+        resume=args.resume
     )
     
     # Final summary
     print("\n" + "=" * 80)
-    print("✅ Data Preparation Complete!")
+    print("✅ Training Pipeline Complete!")
     print("=" * 80)
     print(f"\n📁 Output locations:")
-    print(f"   Processed audio: {args.output_dir}/")
+    print(f"   Processed audio: {args.output_dir}/wavs/")
+    print(f"   Metadata: {metadata_file}")
     print(f"   Model directory: {args.model_dir}/")
-    print(f"   Training manifest: {args.model_dir}/training_manifest.json")
+    print(f"   Best model: {args.model_dir}/best_model.pth")
     print(f"   Config: {args.model_dir}/config.json")
+    print(f"   Checkpoints: {args.model_dir}/checkpoints/")
+    print(f"   Training log: {args.model_dir}/training_log.txt")
     
     print("\n💡 Next Steps:")
-    print("   1. Review the processed audio quality")
-    print("   2. Data is ready for fine-tuning (actual training not yet implemented)")
-    print("   3. For now, use voice cloning fallback (works immediately)")
-    print("   4. Voice cloning uses Turkish phonetics and requires no training")
-    print("   5. Run: python tts_stt_service_base44.py to test")
+    print("   1. Test the fine-tuned model with tts_stt_service_base44.py")
+    print("   2. The service will automatically load the trained model")
+    print(f"   3. Run: python tts_stt_service_base44.py")
     
     return 0
 
 
 if __name__ == "__main__":
+    # Windows compatibility: multiprocessing guard
+    import multiprocessing
+    multiprocessing.freeze_support()
+    
     try:
         sys.exit(main())
     except KeyboardInterrupt:
