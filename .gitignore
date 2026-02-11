@@ -21,3 +21,10 @@ tts_models/
 # Python virtual environment
 venv/
 env/
+
+# Training artifacts
+training/
+!training/.gitkeep
+*.pt
+*.pth
+*.ckpt
