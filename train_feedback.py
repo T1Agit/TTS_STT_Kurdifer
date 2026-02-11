@@ -353,12 +353,31 @@ def main():
     # Load model
     print(f"\n📦 Loading model...")
     model_dir = Path(args.model_dir)
+    checkpoint_dir = Path("training/checkpoints")
     
     try:
+        # Try loading from fine-tuned model directory
         if model_dir.exists():
             print(f"   Loading fine-tuned model from {model_dir}")
             tokenizer = VitsTokenizer.from_pretrained(str(model_dir))
             model = VitsModel.from_pretrained(str(model_dir))
+        # Try loading from latest checkpoint
+        elif checkpoint_dir.exists():
+            checkpoints = sorted(checkpoint_dir.glob("checkpoint_epoch_*.pt"))
+            if checkpoints:
+                latest_checkpoint = checkpoints[-1]
+                print(f"   Fine-tuned model not found, loading from checkpoint: {latest_checkpoint}")
+                # Load base model structure first
+                tokenizer = VitsTokenizer.from_pretrained(args.base_model)
+                model = VitsModel.from_pretrained(args.base_model)
+                # Load checkpoint weights
+                checkpoint = torch.load(str(latest_checkpoint), map_location="cpu")
+                model.load_state_dict(checkpoint["model_state_dict"])
+                print(f"   Loaded checkpoint from epoch {checkpoint.get('epoch', 'unknown')}")
+            else:
+                print(f"   No checkpoints found, loading base model: {args.base_model}")
+                tokenizer = VitsTokenizer.from_pretrained(args.base_model)
+                model = VitsModel.from_pretrained(args.base_model)
         else:
             print(f"   Fine-tuned model not found, loading base model: {args.base_model}")
             tokenizer = VitsTokenizer.from_pretrained(args.base_model)
