@@ -228,6 +228,51 @@ curl -X POST http://localhost:5000/tts \
 
 ---
 
+## 🪟 Windows Quick Start
+
+### For Windows Users (PowerShell/CMD)
+
+If you have the project at `D:\TTS_STT_Kurdifer`, follow these steps:
+
+#### 1. Navigate to Project Directory
+
+**PowerShell:**
+```powershell
+cd D:\TTS_STT_Kurdifer
+```
+
+**CMD:**
+```cmd
+D:
+cd \TTS_STT_Kurdifer
+```
+
+#### 2. Run Training Script
+
+```powershell
+# Quick test training (500 samples, ~30 minutes)
+python train_kurdish_xtts.py
+
+# Medium training (5,000 samples, 2-3 hours)
+python train_kurdish_xtts.py --max_samples 5000
+
+# Full training (all samples, 8-12 hours)
+python train_kurdish_xtts.py --max_samples 0
+```
+
+**Note:** Python 3.14 is supported. Ensure you have Python and pip installed:
+```powershell
+python --version
+pip --version
+```
+
+If dependencies are not installed, run:
+```powershell
+pip install -r requirements.txt
+```
+
+---
+
 ## 🧠 Train Custom Kurdish Voice
 
 Use Google Colab for FREE GPU training:
