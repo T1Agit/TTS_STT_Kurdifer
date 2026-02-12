@@ -184,7 +184,6 @@ class KurdishTTSDataset(Dataset):
                 
                 # Resample to 16kHz if needed using librosa
                 if sample_rate != 16000:
-                    import librosa
                     waveform = librosa.resample(waveform, orig_sr=sample_rate, target_sr=16000)
                 
                 # Convert to torch tensor
@@ -219,21 +218,13 @@ class KurdishTTSDataset(Dataset):
                 n_mels=80
             )
             
-            if device is not None and device.type == 'cuda':
-                mel_transform = mel_transform.to(device)
-            
+            # Compute mels on CPU to avoid unnecessary GPU transfers
             mel_size_mb = 0
             for i, sample in enumerate(tqdm(self.samples, desc="Computing mels")):
                 waveform = sample["waveform"]
-                if device is not None and device.type == 'cuda':
-                    waveform = waveform.to(device)
                 
                 mel_spec = mel_transform(waveform)
                 mel_spec = torch.log(torch.clamp(mel_spec, min=1e-5))
-                
-                # Move back to CPU for storage
-                if device is not None and device.type == 'cuda':
-                    mel_spec = mel_spec.cpu()
                 
                 mel_size_mb += mel_spec.numel() * 4 / 1024 / 1024
                 sample["mel_spec"] = mel_spec
@@ -583,7 +574,7 @@ def train_epoch(
         # Estimate epoch ETA
         batches_remaining = len(dataloader) - batch_idx - 1
         if len(batch_times) > 10:
-            avg_batch_time = sum(batch_times[-10:]) / len(batch_times[-10:])
+            avg_batch_time = sum(batch_times[-10:]) / 10
         else:
             avg_batch_time = sum(batch_times) / len(batch_times)
         epoch_eta_seconds = batches_remaining * avg_batch_time
@@ -748,15 +739,18 @@ def main():
     total_steps = len(dataloader) * auto_epochs // args.gradient_accumulation_steps
     warmup_steps = args.warmup_steps
     
-    def lr_lambda(current_step):
-        if current_step < warmup_steps:
-            # Linear warmup
-            return float(current_step) / float(max(1, warmup_steps))
-        # Cosine decay
-        progress = float(current_step - warmup_steps) / float(max(1, total_steps - warmup_steps))
-        return max(0.0, 0.5 * (1.0 + np.cos(np.pi * progress)))
+    # Create lr_lambda with explicit closure to capture warmup_steps and total_steps
+    def create_lr_lambda(warmup_steps, total_steps):
+        def lr_lambda(current_step):
+            if current_step < warmup_steps:
+                # Linear warmup
+                return float(current_step) / float(max(1, warmup_steps))
+            # Cosine decay
+            progress = float(current_step - warmup_steps) / float(max(1, total_steps - warmup_steps))
+            return max(0.0, 0.5 * (1.0 + np.cos(np.pi * progress)))
+        return lr_lambda
     
-    scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
+    scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, create_lr_lambda(warmup_steps, total_steps))
     
     print(f"\n📈 Learning rate schedule:")
     print(f"   Total steps: {total_steps:,}")
