@@ -77,6 +77,24 @@ def parse_args():
         help="Number of training epochs (default: 10)"
     )
     parser.add_argument(
+        "--min_epochs",
+        type=int,
+        default=3,
+        help="Minimum number of training epochs (default: 3)"
+    )
+    parser.add_argument(
+        "--warmup_steps",
+        type=int,
+        default=500,
+        help="Number of warmup steps for learning rate (default: 500)"
+    )
+    parser.add_argument(
+        "--use_scheduler",
+        action="store_true",
+        default=True,
+        help="Use cosine annealing LR scheduler after warmup (default: True)"
+    )
+    parser.add_argument(
         "--fp16",
         action="store_true",
         default=True,
@@ -234,6 +252,82 @@ class MelSpectrogramComputer:
         return mel_spec
 
 
+class MultiScaleMelLoss(nn.Module):
+    """Multi-scale mel spectrogram loss for better gradient flow"""
+    
+    def __init__(
+        self,
+        sample_rate: int = 16000,
+        n_mels: int = 80,
+        device: torch.device = None
+    ):
+        super().__init__()
+        
+        # Create mel transforms at different scales (different FFT sizes)
+        # Smaller FFT -> better time resolution
+        # Larger FFT -> better frequency resolution
+        self.scales = [
+            # (n_fft, hop_length, weight)
+            (512, 128, 0.25),    # Fine scale - good for transients
+            (1024, 256, 0.5),    # Medium scale - balanced (original)
+            (2048, 512, 0.25),   # Coarse scale - good for overall structure
+        ]
+        
+        self.mel_computers = nn.ModuleList([
+            torchaudio.transforms.MelSpectrogram(
+                sample_rate=sample_rate,
+                n_fft=n_fft,
+                hop_length=hop_length,
+                n_mels=n_mels
+            )
+            for n_fft, hop_length, _ in self.scales
+        ])
+        
+        if device is not None:
+            self.to(device)
+    
+    def forward(
+        self,
+        predicted_mel: torch.Tensor,
+        target_waveform: torch.Tensor
+    ) -> torch.Tensor:
+        """
+        Compute multi-scale mel loss
+        
+        Args:
+            predicted_mel: Predicted mel spectrogram from model
+            target_waveform: Target audio waveform
+            
+        Returns:
+            Combined loss across all scales
+        """
+        total_loss = 0.0
+        
+        for mel_transform, (n_fft, hop_length, weight) in zip(self.mel_computers, self.scales):
+            # Compute target mel at this scale
+            target_mel = mel_transform(target_waveform)
+            target_mel = torch.log(torch.clamp(target_mel, min=1e-5))
+            
+            # Resize predicted mel to match target size (if needed)
+            # Use interpolation to match temporal dimension
+            if predicted_mel.shape[-1] != target_mel.shape[-1]:
+                # Interpolate along time dimension
+                predicted_mel_resized = F.interpolate(
+                    predicted_mel.unsqueeze(1),
+                    size=(target_mel.shape[-2], target_mel.shape[-1]),
+                    mode='bilinear',
+                    align_corners=False
+                ).squeeze(1)
+            else:
+                predicted_mel_resized = predicted_mel
+            
+            # Compute L1 loss at this scale
+            loss = F.l1_loss(predicted_mel_resized, target_mel)
+            total_loss += weight * loss
+        
+        return total_loss
+
+
 def collate_fn(batch: List[Dict]) -> Dict:
     """
     Collate function for DataLoader
@@ -278,12 +372,26 @@ def train_epoch(
     model: VitsModel,
     dataloader: DataLoader,
     optimizer: torch.optim.Optimizer,
+    scheduler,
     device: torch.device,
     gradient_accumulation_steps: int = 1,
-    use_fp16: bool = True
+    use_fp16: bool = True,
+    use_multiscale_loss: bool = True,
+    epoch_num: int = 1
 ) -> float:
     """
     Train for one epoch
+    
+    Args:
+        model: VITS model
+        dataloader: Training data loader
+        optimizer: Optimizer
+        scheduler: Learning rate scheduler (can be None)
+        device: Device to train on
+        gradient_accumulation_steps: Number of steps to accumulate gradients
+        use_fp16: Use mixed precision training
+        use_multiscale_loss: Use multi-scale mel loss instead of single-scale
+        epoch_num: Current epoch number (for logging)
     
     Returns:
         Average loss for the epoch
@@ -295,50 +403,145 @@ def train_epoch(
     # Create GradScaler for mixed precision
     scaler = torch.cuda.amp.GradScaler() if use_fp16 else None
     
-    # Create mel spectrogram computer (cached transform)
-    mel_computer = MelSpectrogramComputer(device=device)
+    # Create mel loss computer
+    if use_multiscale_loss:
+        mel_loss_fn = MultiScaleMelLoss(device=device)
+    else:
+        mel_computer = MelSpectrogramComputer(device=device)
     
-    progress_bar = tqdm(dataloader, desc="Training")
+    progress_bar = tqdm(dataloader, desc=f"Epoch {epoch_num}")
     
     for batch_idx, batch in enumerate(progress_bar):
         input_ids = batch["input_ids"].to(device)
         attention_mask = batch["attention_mask"].to(device)
         waveforms = batch["waveforms"].to(device)
         
-        # Compute mel spectrograms with cached transform
-        mel_specs = []
-        for waveform in waveforms:
-            mel_spec = mel_computer.compute(waveform)
-            mel_specs.append(mel_spec)
-        
-        # Stack mel spectrograms (pad to same length)
-        max_mel_len = max(mel.shape[-1] for mel in mel_specs)
-        mel_specs_padded = []
-        for mel in mel_specs:
-            pad_len = max_mel_len - mel.shape[-1]
-            mel_padded = F.pad(mel, (0, pad_len), value=0.0)
-            mel_specs_padded.append(mel_padded)
-        mel_specs = torch.stack(mel_specs_padded).to(device)
-        
         # Forward pass with mixed precision
         if use_fp16:
             with torch.cuda.amp.autocast():
-                outputs = model(
+                # Generate mel spectrogram predictions
+                outputs = model.generate(
                     input_ids=input_ids,
                     attention_mask=attention_mask,
-                    labels=mel_specs
+                    return_dict=True
                 )
-                loss = outputs.loss / gradient_accumulation_steps
+                
+                # Get predicted waveform or mel
+                if hasattr(outputs, 'waveform'):
+                    # If model outputs waveform, convert to mel
+                    predicted_waveform = outputs.waveform
+                    if use_multiscale_loss:
+                        # Multi-scale loss computes mels internally from waveform
+                        loss = mel_loss_fn(predicted_waveform, waveforms)
+                    else:
+                        # Compute mel from predicted waveform
+                        predicted_mels = []
+                        target_mels = []
+                        for pred_wav, target_wav in zip(predicted_waveform, waveforms):
+                            pred_mel = mel_computer.compute(pred_wav)
+                            target_mel = mel_computer.compute(target_wav)
+                            predicted_mels.append(pred_mel)
+                            target_mels.append(target_mel)
+                        
+                        # Pad and stack
+                        max_len = max(max(m.shape[-1] for m in predicted_mels),
+                                     max(m.shape[-1] for m in target_mels))
+                        
+                        predicted_mels = torch.stack([
+                            F.pad(m, (0, max_len - m.shape[-1])) for m in predicted_mels
+                        ])
+                        target_mels = torch.stack([
+                            F.pad(m, (0, max_len - m.shape[-1])) for m in target_mels
+                        ])
+                        
+                        loss = F.l1_loss(predicted_mels, target_mels)
+                else:
+                    # Fallback: use model's built-in loss if available
+                    # Compute target mels
+                    target_mels = []
+                    for waveform in waveforms:
+                        if use_multiscale_loss:
+                            # Can't use multiscale with model outputs, fallback to single scale
+                            mel = mel_computer.compute(waveform)
+                        else:
+                            mel = mel_computer.compute(waveform)
+                        target_mels.append(mel)
+                    
+                    # Pad target mels
+                    max_mel_len = max(mel.shape[-1] for mel in target_mels)
+                    target_mels_padded = []
+                    for mel in target_mels:
+                        pad_len = max_mel_len - mel.shape[-1]
+                        mel_padded = F.pad(mel, (0, pad_len), value=0.0)
+                        target_mels_padded.append(mel_padded)
+                    target_mels = torch.stack(target_mels_padded).to(device)
+                    
+                    # Use model's forward pass with labels
+                    outputs = model(
+                        input_ids=input_ids,
+                        attention_mask=attention_mask,
+                        labels=target_mels
+                    )
+                    loss = outputs.loss
+                
+                loss = loss / gradient_accumulation_steps
             
             # Backward pass with gradient scaling
             scaler.scale(loss).backward()
         else:
-            outputs = model(
+            # Same logic without mixed precision
+            outputs = model.generate(
                 input_ids=input_ids,
                 attention_mask=attention_mask,
-                labels=mel_specs
+                return_dict=True
             )
-            loss = outputs.loss / gradient_accumulation_steps
+            
+            if hasattr(outputs, 'waveform'):
+                predicted_waveform = outputs.waveform
+                if use_multiscale_loss:
+                    loss = mel_loss_fn(predicted_waveform, waveforms)
+                else:
+                    predicted_mels = []
+                    target_mels = []
+                    for pred_wav, target_wav in zip(predicted_waveform, waveforms):
+                        pred_mel = mel_computer.compute(pred_wav)
+                        target_mel = mel_computer.compute(target_wav)
+                        predicted_mels.append(pred_mel)
+                        target_mels.append(target_mel)
+                    
+                    max_len = max(max(m.shape[-1] for m in predicted_mels),
+                                 max(m.shape[-1] for m in target_mels))
+                    
+                    predicted_mels = torch.stack([
+                        F.pad(m, (0, max_len - m.shape[-1])) for m in predicted_mels
+                    ])
+                    target_mels = torch.stack([
+                        F.pad(m, (0, max_len - m.shape[-1])) for m in target_mels
+                    ])
+                    
+                    loss = F.l1_loss(predicted_mels, target_mels)
+            else:
+                target_mels = []
+                for waveform in waveforms:
+                    mel = mel_computer.compute(waveform)
+                    target_mels.append(mel)
+                
+                max_mel_len = max(mel.shape[-1] for mel in target_mels)
+                target_mels_padded = []
+                for mel in target_mels:
+                    pad_len = max_mel_len - mel.shape[-1]
+                    mel_padded = F.pad(mel, (0, pad_len), value=0.0)
+                    target_mels_padded.append(mel_padded)
+                target_mels = torch.stack(target_mels_padded).to(device)
+                
+                outputs = model(
+                    input_ids=input_ids,
+                    attention_mask=attention_mask,
+                    labels=target_mels
+                )
+                loss = outputs.loss
+            
+            loss = loss / gradient_accumulation_steps
             loss.backward()
         
         # Update weights after accumulation
@@ -348,13 +551,22 @@ def train_epoch(
                 scaler.update()
             else:
                 optimizer.step()
+            
+            # Step scheduler after each optimizer step
+            if scheduler is not None:
+                scheduler.step()
+            
             optimizer.zero_grad()
         
         total_loss += loss.item() * gradient_accumulation_steps
         num_batches += 1
         
-        # Update progress bar
-        progress_bar.set_postfix({"loss": f"{loss.item() * gradient_accumulation_steps:.4f}"})
+        # Update progress bar with current LR
+        current_lr = optimizer.param_groups[0]['lr']
+        progress_bar.set_postfix({
+            "loss": f"{loss.item() * gradient_accumulation_steps:.4f}",
+            "lr": f"{current_lr:.2e}"
+        })
     
     return total_loss / num_batches if num_batches > 0 else 0.0
 
@@ -410,7 +622,9 @@ def main():
     print(f"Gradient accumulation: {args.gradient_accumulation_steps}")
     print(f"Effective batch size: {args.batch_size * args.gradient_accumulation_steps}")
     print(f"Learning rate: {args.learning_rate}")
-    print(f"Epochs: {args.epochs}")
+    print(f"Epochs: {args.epochs} (minimum: {args.min_epochs})")
+    print(f"Warmup steps: {args.warmup_steps}")
+    print(f"Use scheduler: {args.use_scheduler}")
     print(f"Mixed precision (FP16): {args.fp16}")
     print("=" * 70)
     
@@ -428,12 +642,23 @@ def main():
         tokenizer = VitsTokenizer.from_pretrained(args.model_name)
         model = VitsModel.from_pretrained(args.model_name)
         model = model.to(device)
+        
+        # CRITICAL: Ensure ALL parameters require gradients
+        print("\n🔧 Ensuring all model parameters require gradients...")
+        params_before = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        
+        for param in model.parameters():
+            param.requires_grad = True
+        
+        params_after = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        
         print("✅ Model loaded successfully")
         
         # Print model size
         num_params = sum(p.numel() for p in model.parameters())
-        print(f"   Parameters: {num_params / 1e6:.2f}M")
-        print(f"   Trainable parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad) / 1e6:.2f}M")
+        print(f"   Total parameters: {num_params / 1e6:.2f}M")
+        print(f"   Trainable before: {params_before / 1e6:.2f}M")
+        print(f"   Trainable after: {params_after / 1e6:.2f}M")
         
     except Exception as e:
         print(f"❌ Error loading model: {e}")
@@ -468,23 +693,62 @@ def main():
         eps=1e-8
     )
     
+    # Calculate total training steps for scheduler
+    steps_per_epoch = len(dataloader) // args.gradient_accumulation_steps
+    # Enforce minimum epochs
+    actual_epochs = max(args.epochs, args.min_epochs)
+    total_steps = steps_per_epoch * actual_epochs
+    
+    print(f"\n📊 Training configuration:")
+    print(f"   Steps per epoch: {steps_per_epoch}")
+    print(f"   Requested epochs: {args.epochs}")
+    print(f"   Actual epochs (enforced minimum): {actual_epochs}")
+    print(f"   Total training steps: {total_steps}")
+    
+    # Setup learning rate scheduler with warmup
+    scheduler = None
+    if args.use_scheduler:
+        from torch.optim.lr_scheduler import LambdaLR
+        import math
+        
+        def lr_lambda(current_step: int):
+            """
+            Learning rate schedule with warmup and cosine decay
+            """
+            if current_step < args.warmup_steps:
+                # Linear warmup
+                return float(current_step) / float(max(1, args.warmup_steps))
+            else:
+                # Cosine annealing after warmup
+                progress = float(current_step - args.warmup_steps) / float(max(1, total_steps - args.warmup_steps))
+                return 0.5 * (1.0 + math.cos(math.pi * progress))
+        
+        scheduler = LambdaLR(optimizer, lr_lambda)
+        print(f"✅ Learning rate scheduler configured (warmup + cosine annealing)")
+        print(f"   Warmup steps: {args.warmup_steps}")
+        print(f"   Max LR: {args.learning_rate}")
+        print(f"   Min LR: ~{args.learning_rate * 0.0:.2e} (cosine decay to near-zero)")
+    
     # Training loop
-    print(f"\n🚀 Starting training for {args.epochs} epochs...")
+    print(f"\n🚀 Starting training for {actual_epochs} epochs...")
     print("=" * 70)
     
     checkpoint_dir = Path(args.checkpoint_dir)
     
-    for epoch in range(args.epochs):
-        print(f"\n📍 Epoch {epoch + 1}/{args.epochs}")
+    for epoch in range(actual_epochs):
+        print(f"\n📍 Epoch {epoch + 1}/{actual_epochs}")
         
         # Train for one epoch
         avg_loss = train_epoch(
             model=model,
             dataloader=dataloader,
             optimizer=optimizer,
+            scheduler=scheduler,
             device=device,
             gradient_accumulation_steps=args.gradient_accumulation_steps,
-            use_fp16=args.fp16 and device.type == "cuda"
+            use_fp16=args.fp16 and device.type == "cuda",
+            use_multiscale_loss=True,  # Enable multi-scale mel loss
+            epoch_num=epoch + 1
         )
         
         print(f"✅ Epoch {epoch + 1} complete - Average loss: {avg_loss:.4f}")
