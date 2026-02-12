@@ -441,8 +441,9 @@ def train_epoch(
                             target_mels.append(target_mel)
                         
                         # Pad and stack
-                        max_len = max(max(m.shape[-1] for m in predicted_mels),
-                                     max(m.shape[-1] for m in target_mels))
+                        max_pred_len = max(m.shape[-1] for m in predicted_mels)
+                        max_target_len = max(m.shape[-1] for m in target_mels)
+                        max_len = max(max_pred_len, max_target_len)
                         
                         predicted_mels = torch.stack([
                             F.pad(m, (0, max_len - m.shape[-1])) for m in predicted_mels
@@ -502,8 +503,9 @@ def train_epoch(
                         predicted_mels.append(pred_mel)
                         target_mels.append(target_mel)
                     
-                    max_len = max(max(m.shape[-1] for m in predicted_mels),
-                                 max(m.shape[-1] for m in target_mels))
+                    max_pred_len = max(m.shape[-1] for m in predicted_mels)
+                    max_target_len = max(m.shape[-1] for m in target_mels)
+                    max_len = max(max_pred_len, max_target_len)
                     
                     predicted_mels = torch.stack([
                         F.pad(m, (0, max_len - m.shape[-1])) for m in predicted_mels
