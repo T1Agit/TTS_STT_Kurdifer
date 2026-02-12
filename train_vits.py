@@ -91,8 +91,8 @@ def parse_args():
     parser.add_argument(
         "--use_scheduler",
         action="store_true",
-        default=True,
-        help="Use cosine annealing LR scheduler after warmup (default: True)"
+        default=False,
+        help="Use cosine annealing LR scheduler after warmup (default: False, use --use_scheduler to enable)"
     )
     parser.add_argument(
         "--fp16",
@@ -288,14 +288,14 @@ class MultiScaleMelLoss(nn.Module):
     
     def forward(
         self,
-        predicted_mel: torch.Tensor,
+        predicted_waveform: torch.Tensor,
         target_waveform: torch.Tensor
     ) -> torch.Tensor:
         """
         Compute multi-scale mel loss
         
         Args:
-            predicted_mel: Predicted mel spectrogram from model
+            predicted_waveform: Predicted audio waveform from model
             target_waveform: Target audio waveform
             
         Returns:
@@ -304,25 +304,22 @@ class MultiScaleMelLoss(nn.Module):
         total_loss = 0.0
         
         for mel_transform, (n_fft, hop_length, weight) in zip(self.mel_computers, self.scales):
-            # Compute target mel at this scale
+            # Compute mels at this scale for both predicted and target
+            predicted_mel = mel_transform(predicted_waveform)
+            predicted_mel = torch.log(torch.clamp(predicted_mel, min=1e-5))
+            
             target_mel = mel_transform(target_waveform)
             target_mel = torch.log(torch.clamp(target_mel, min=1e-5))
             
-            # Resize predicted mel to match target size (if needed)
-            # Use interpolation to match temporal dimension
+            # Ensure both have same temporal dimension
             if predicted_mel.shape[-1] != target_mel.shape[-1]:
-                # Interpolate along time dimension
-                predicted_mel_resized = F.interpolate(
-                    predicted_mel.unsqueeze(1),
-                    size=(target_mel.shape[-2], target_mel.shape[-1]),
-                    mode='bilinear',
-                    align_corners=False
-                ).squeeze(1)
-            else:
-                predicted_mel_resized = predicted_mel
+                # Resize to match the smaller dimension
+                min_len = min(predicted_mel.shape[-1], target_mel.shape[-1])
+                predicted_mel = predicted_mel[..., :min_len]
+                target_mel = target_mel[..., :min_len]
             
             # Compute L1 loss at this scale
-            loss = F.l1_loss(predicted_mel_resized, target_mel)
+            loss = F.l1_loss(predicted_mel, target_mel)
             total_loss += weight * loss
         
         return total_loss
@@ -460,11 +457,7 @@ def train_epoch(
                     # Compute target mels
                     target_mels = []
                     for waveform in waveforms:
-                        if use_multiscale_loss:
-                            # Can't use multiscale with model outputs, fallback to single scale
-                            mel = mel_computer.compute(waveform)
-                        else:
-                            mel = mel_computer.compute(waveform)
+                        mel = mel_computer.compute(waveform)
                         target_mels.append(mel)
                     
                     # Pad target mels
@@ -657,8 +650,8 @@ def main():
         # Print model size
         num_params = sum(p.numel() for p in model.parameters())
         print(f"   Total parameters: {num_params / 1e6:.2f}M")
-        print(f"   Trainable before: {params_before / 1e6:.2f}M")
-        print(f"   Trainable after: {params_after / 1e6:.2f}M")
+        print(f"   Trainable (initially loaded): {params_before / 1e6:.2f}M")
+        print(f"   Trainable (after unfreezing): {params_after / 1e6:.2f}M")
         
     except Exception as e:
         print(f"❌ Error loading model: {e}")
@@ -719,15 +712,15 @@ def main():
                 # Linear warmup
                 return float(current_step) / float(max(1, args.warmup_steps))
             else:
-                # Cosine annealing after warmup
+                # Cosine annealing after warmup with minimum LR of 10% of max
                 progress = float(current_step - args.warmup_steps) / float(max(1, total_steps - args.warmup_steps))
-                return 0.5 * (1.0 + math.cos(math.pi * progress))
+                return 0.1 + 0.45 * (1.0 + math.cos(math.pi * progress))  # Decays from 1.0 to 0.1
         
         scheduler = LambdaLR(optimizer, lr_lambda)
         print(f"✅ Learning rate scheduler configured (warmup + cosine annealing)")
         print(f"   Warmup steps: {args.warmup_steps}")
-        print(f"   Max LR: {args.learning_rate}")
-        print(f"   Min LR: ~{args.learning_rate * 0.0:.2e} (cosine decay to near-zero)")
+        print(f"   Max LR: {args.learning_rate:.2e}")
+        print(f"   Min LR: {args.learning_rate * 0.1:.2e} (10% of max)")
     
     # Training loop
     print(f"\n🚀 Starting training for {actual_epochs} epochs...")
