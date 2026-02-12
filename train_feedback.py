@@ -6,6 +6,8 @@ This script enables incremental fine-tuning based on user feedback from the Base
 Users can record corrections when the model mispronounces words, and this script
 will incorporate those corrections into the model.
 
+Uses soundfile for audio loading (NOT torchaudio.load due to torchcodec issues).
+
 Expected input structure:
 - training/feedback/
   - audio_001.wav (corrected pronunciation)
@@ -26,6 +28,8 @@ from torch.utils.data import Dataset, DataLoader
 import torchaudio
 from transformers import VitsModel, VitsTokenizer
 from tqdm import tqdm
+import soundfile as sf
+import librosa
 
 
 def parse_args():
@@ -96,9 +100,6 @@ class FeedbackDataset(Dataset):
         self.feedback_dir = Path(feedback_dir)
         self.tokenizer = tokenizer
         
-        # Cache resampler
-        self.resampler_cache = {}
-        
         # Scan for WAV+TXT pairs
         self.samples = self._scan_feedback_pairs()
         
@@ -143,25 +144,26 @@ class FeedbackDataset(Dataset):
         """Get a single sample"""
         wav_path, text = self.samples[idx]
         
-        # Load audio
-        waveform, sample_rate = torchaudio.load(str(wav_path))
+        # Load audio using soundfile (NOT torchaudio.load)
+        waveform, sample_rate = sf.read(str(wav_path), dtype='float32')
         
         # Ensure mono
-        if waveform.shape[0] > 1:
-            waveform = waveform.mean(dim=0, keepdim=True)
+        if waveform.ndim > 1:
+            waveform = waveform.mean(axis=1)
         
-        # Resample to 16kHz if needed (with caching)
+        # Resample to 16kHz if needed using librosa
         if sample_rate != 16000:
-            if sample_rate not in self.resampler_cache:
-                self.resampler_cache[sample_rate] = torchaudio.transforms.Resample(sample_rate, 16000)
-            waveform = self.resampler_cache[sample_rate](waveform)
+            waveform = librosa.resample(waveform, orig_sr=sample_rate, target_sr=16000)
+        
+        # Convert to torch tensor
+        waveform = torch.from_numpy(waveform).float()
         
         # Tokenize text
         input_ids = self.tokenizer(text, return_tensors="pt").input_ids.squeeze(0)
         
         return {
             "input_ids": input_ids,
-            "waveform": waveform.squeeze(0),
+            "waveform": waveform,
             "text": text,
             "filename": wav_path.name
         }
