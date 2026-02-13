@@ -8,9 +8,10 @@ for Kurdish TTS with support for multiple model versions.
 
 import io
 import os
+import re
 import tempfile
 from pathlib import Path
-from typing import Optional, Dict
+from typing import Optional, Dict, List, Tuple
 import torch
 import torchaudio
 from transformers import VitsModel, VitsTokenizer
@@ -152,6 +153,167 @@ class VitsTTSService:
         
         return available
     
+    def _split_text_on_punctuation(self, text: str) -> List[Tuple[str, str]]:
+        """
+        Split text on punctuation marks while preserving the punctuation
+        
+        Args:
+            text: Text to split
+            
+        Returns:
+            List of tuples (segment_text, punctuation)
+        """
+        # Pattern to split on punctuation while capturing it
+        # Matches text followed by one of: . ? ! , ; :
+        pattern = r'([^.?!,;:]+)([.?!,;:])'
+        
+        matches = re.findall(pattern, text)
+        
+        if not matches:
+            # No punctuation found, return the entire text with no punctuation
+            stripped = text.strip()
+            if stripped:
+                return [(stripped, '')]
+            return []
+        
+        segments = []
+        for segment_text, punctuation in matches:
+            stripped = segment_text.strip()
+            if stripped:  # Skip empty segments
+                segments.append((stripped, punctuation))
+        
+        # Handle any remaining text after the last punctuation
+        last_match_end = 0
+        for match in re.finditer(pattern, text):
+            last_match_end = match.end()
+        
+        if last_match_end < len(text):
+            remaining = text[last_match_end:].strip()
+            if remaining:
+                segments.append((remaining, ''))
+        
+        return segments
+    
+    def _get_silence_duration(self, punctuation: str) -> int:
+        """
+        Get silence duration in milliseconds based on punctuation type
+        
+        Args:
+            punctuation: Punctuation character
+            
+        Returns:
+            Duration in milliseconds
+        """
+        silence_map = {
+            '.': 500,  # Period
+            '?': 500,  # Question mark
+            '!': 500,  # Exclamation mark
+            ',': 250,  # Comma
+            ';': 350,  # Semicolon
+            ':': 300,  # Colon
+        }
+        return silence_map.get(punctuation, 0)
+    
+    def _generate_segment_audio(
+        self,
+        text: str,
+        model: VitsModel,
+        tokenizer: VitsTokenizer
+    ) -> AudioSegment:
+        """
+        Generate audio for a single text segment
+        
+        Args:
+            text: Text segment to synthesize
+            model: VITS model
+            tokenizer: VITS tokenizer
+            
+        Returns:
+            AudioSegment with the generated audio
+        """
+        # Tokenize text
+        inputs = tokenizer(text, return_tensors="pt")
+        input_ids = inputs.input_ids.to(self.device)
+        
+        # Generate speech
+        with torch.no_grad():
+            outputs = model(input_ids)
+            waveform = outputs.waveform.squeeze()
+        
+        # Move to CPU and convert to numpy
+        waveform_cpu = waveform.cpu()
+        
+        # Save to temporary WAV file
+        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp_file:
+            temp_path = tmp_file.name
+        
+        try:
+            # Save waveform (VITS outputs at 16kHz)
+            torchaudio.save(
+                temp_path,
+                waveform_cpu.unsqueeze(0),
+                sample_rate=16000,
+                format='wav'
+            )
+            
+            # Load as AudioSegment
+            audio_segment = AudioSegment.from_file(temp_path, format="wav")
+            
+        finally:
+            # Cleanup temp file
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+        
+        return audio_segment
+    
+    def _preprocess_and_generate(
+        self,
+        text: str,
+        model: VitsModel,
+        tokenizer: VitsTokenizer
+    ) -> AudioSegment:
+        """
+        Preprocess text by splitting on punctuation and generate audio with pauses
+        
+        Args:
+            text: Full text to synthesize
+            model: VITS model
+            tokenizer: VITS tokenizer
+            
+        Returns:
+            AudioSegment with the complete audio including pauses
+        """
+        # Split text into segments
+        segments = self._split_text_on_punctuation(text)
+        
+        # If only one segment and no punctuation, use direct generation
+        if len(segments) <= 1 and (not segments or segments[0][1] == ''):
+            return self._generate_segment_audio(text.strip(), model, tokenizer)
+        
+        # Generate audio for each segment and add silence
+        combined_audio = None
+        
+        for i, (segment_text, punctuation) in enumerate(segments):
+            # Generate audio for this segment
+            segment_audio = self._generate_segment_audio(segment_text, model, tokenizer)
+            
+            # Add to combined audio
+            if combined_audio is None:
+                combined_audio = segment_audio
+            else:
+                combined_audio += segment_audio
+            
+            # Add silence based on punctuation (if not the last segment or has punctuation)
+            silence_duration = self._get_silence_duration(punctuation)
+            if silence_duration > 0:
+                silence = AudioSegment.silent(
+                    duration=silence_duration,
+                    frame_rate=16000
+                )
+                combined_audio += silence
+        
+        return combined_audio
+    
     def generate_speech(
         self,
         text: str,
@@ -179,47 +341,17 @@ class VitsTTSService:
             # Load model
             model, tokenizer = self._load_model(model_version)
             
-            # Tokenize text
-            inputs = tokenizer(text, return_tensors="pt")
-            input_ids = inputs.input_ids.to(self.device)
+            # Use punctuation-aware preprocessing
+            audio_segment = self._preprocess_and_generate(text, model, tokenizer)
             
-            # Generate speech
-            with torch.no_grad():
-                outputs = model(input_ids)
-                waveform = outputs.waveform.squeeze()
-            
-            # Move to CPU and convert to numpy
-            waveform_cpu = waveform.cpu()
-            
-            # Save to temporary WAV file
-            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp_file:
-                temp_path = tmp_file.name
-            
-            try:
-                # Save waveform (VITS outputs at 16kHz)
-                torchaudio.save(
-                    temp_path,
-                    waveform_cpu.unsqueeze(0),
-                    sample_rate=16000,
-                    format='wav'
-                )
-                
-                # Read the WAV file
-                with open(temp_path, 'rb') as f:
-                    wav_bytes = f.read()
-            finally:
-                # Ensure cleanup happens even if an error occurs
-                if os.path.exists(temp_path):
-                    os.unlink(temp_path)
-            
-            # Convert to desired format if needed
+            # Convert to desired format
+            output_buffer = io.BytesIO()
             if output_format.lower() == 'mp3':
-                audio = AudioSegment.from_file(io.BytesIO(wav_bytes), format="wav")
-                output_buffer = io.BytesIO()
-                audio.export(output_buffer, format="mp3")
-                audio_bytes = output_buffer.getvalue()
+                audio_segment.export(output_buffer, format="mp3")
             else:
-                audio_bytes = wav_bytes
+                audio_segment.export(output_buffer, format="wav")
+            
+            audio_bytes = output_buffer.getvalue()
             
             print(f"✅ Speech generated successfully")
             print(f"   Output size: {len(audio_bytes)} bytes")
