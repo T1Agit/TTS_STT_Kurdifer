@@ -58,6 +58,7 @@ def tts():
     text = data.get('text')
     language = data.get('language', 'english')
     model_version = data.get('model_version', 'original')  # Support model selection for Kurdish
+    voice_preset = data.get('voice_preset', 'default')  # Support voice presets
     
     if not text:
         return jsonify({'success': False, 'error': 'Missing text'}), 400
@@ -69,11 +70,20 @@ def tts():
             'error': 'model_version parameter is only supported for Kurdish language'
         }), 400
     
+    # Validate voice_preset values
+    valid_presets = ['default', 'elderly_male', 'elderly_female']
+    if voice_preset not in valid_presets:
+        return jsonify({
+            'success': False,
+            'error': f'Invalid voice_preset. Must be one of: {", ".join(valid_presets)}'
+        }), 400
+    
     try:
         result = service.text_to_speech_base44(
             text, 
             language,
-            model_version=model_version
+            model_version=model_version,
+            voice_preset=voice_preset
         )
         return jsonify({
             'success': True,
@@ -81,7 +91,8 @@ def tts():
             'format': result['format'],
             'language': result['language'],
             'model': result.get('model', 'unknown'),
-            'engine': result.get('engine', 'unknown')
+            'engine': result.get('engine', 'unknown'),
+            'voice_preset': voice_preset
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
