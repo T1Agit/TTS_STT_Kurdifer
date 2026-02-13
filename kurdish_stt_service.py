@@ -16,6 +16,7 @@ import numpy as np
 from scipy import signal
 from pydub import AudioSegment
 from transformers import Wav2Vec2ForCTC, AutoProcessor
+from kurdish_postprocessor import KurdishPostProcessor
 
 
 class KurdishSTTService:
@@ -37,6 +38,7 @@ class KurdishSTTService:
         self.model = None
         self.processor = None
         self.current_lang = None
+        self.postprocessor = KurdishPostProcessor()
         
         print(f"🎙️ Kurdish STT Service initialized")
         print(f"   Device: {self.device}")
@@ -179,12 +181,18 @@ class KurdishSTTService:
             
             # Decode
             predicted_ids = torch.argmax(logits, dim=-1)
-            transcription = self.processor.batch_decode(predicted_ids)[0]
+            raw_transcription = self.processor.batch_decode(predicted_ids)[0]
             
-            print(f"✅ Transcribed: '{transcription}'")
+            # Apply post-processing corrections
+            corrected_transcription = self.postprocessor.correct_transcription(raw_transcription)
+            
+            print(f"✅ Raw: '{raw_transcription}'")
+            if raw_transcription != corrected_transcription:
+                print(f"✨ Corrected: '{corrected_transcription}'")
             
             result = {
-                'text': transcription,
+                'raw_text': raw_transcription,
+                'text': corrected_transcription,
                 'language': self.TARGET_LANG,
                 'sample_rate': self.SAMPLE_RATE,
                 'duration': len(waveform) / self.SAMPLE_RATE
