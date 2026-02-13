@@ -228,6 +228,14 @@
                 </select>
             </div>
             
+            <div class="form-group" id="modelGroup" style="display: none;">
+                <label for="model">Kurdish TTS Model:</label>
+                <select id="model" name="model">
+                    <option value="original">Original (MMS Base Model)</option>
+                    <option value="trained_v8">Trained v8 (Fine-tuned)</option>
+                </select>
+            </div>
+            
             <button type="submit" id="submitBtn">
                 🎵 Generate Speech
             </button>
@@ -256,6 +264,18 @@
         const audio = document.getElementById('audio');
         const audioInfo = document.getElementById('audioInfo');
         const submitBtn = document.getElementById('submitBtn');
+        const languageSelect = document.getElementById('language');
+        const modelGroup = document.getElementById('modelGroup');
+        const modelSelect = document.getElementById('model');
+        
+        // Show/hide model selector based on language
+        languageSelect.addEventListener('change', () => {
+            if (languageSelect.value === 'kurdish') {
+                modelGroup.style.display = 'block';
+            } else {
+                modelGroup.style.display = 'none';
+            }
+        });
         
         // Check API health on load
         checkAPIHealth();
@@ -278,6 +298,7 @@
             
             const text = document.getElementById('text').value;
             const language = document.getElementById('language').value;
+            const modelVersion = modelSelect.value;
             
             // Hide audio player
             audioPlayer.classList.remove('show');
@@ -288,12 +309,17 @@
             showStatus('Generating speech... Please wait', 'loading');
             
             try {
+                const requestBody = { text, language };
+                if (language === 'kurdish') {
+                    requestBody.model_version = modelVersion;
+                }
+                
                 const response = await fetch(`${API_URL}/tts`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ text, language })
+                    body: JSON.stringify(requestBody)
                 });
                 
                 if (!response.ok) {
@@ -318,13 +344,19 @@
                 
                 // Show info
                 const compressionRatio = (audioBytes.length / audioBase44.length).toFixed(2);
-                audioInfo.innerHTML = `
+                let infoHtml = `
                     <strong>Text:</strong> ${text.substring(0, 50)}${text.length > 50 ? '...' : ''}<br>
                     <strong>Language:</strong> ${language}<br>
                     <strong>Audio size:</strong> ${audioBytes.length} bytes<br>
                     <strong>Base44 size:</strong> ${audioBase44.length} chars<br>
                     <strong>Compression:</strong> ${compressionRatio}x
                 `;
+                
+                if (language === 'kurdish' && data.model) {
+                    infoHtml += `<br><strong>Model:</strong> ${data.model} (${data.engine})`;
+                }
+                
+                audioInfo.innerHTML = infoHtml;
                 
                 showStatus('✅ Speech generated successfully!', 'success');
                 
