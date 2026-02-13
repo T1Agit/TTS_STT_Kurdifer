@@ -2,7 +2,7 @@
 """
 Kurdish STT (Speech-to-Text) Service
 
-Uses facebook/mms-1b-all model with Kurdish (Kurmanji) language adapter (kmr)
+Uses facebook/mms-1b-all model with Kurdish (Kurmanji) language adapter (kur)
 for speech recognition with proper Kurdish character support (ê, î, û, ç, ş).
 """
 
@@ -25,7 +25,7 @@ class KurdishSTTService:
     
     # Model configuration
     MODEL_ID = "facebook/mms-1b-all"
-    TARGET_LANG = "kmr"  # Kurdish (Kurmanji)
+    TARGET_LANG = "kur"  # Kurdish (Kurmanji) - ISO 639-3 code
     SAMPLE_RATE = 16000
     
     def __init__(self):
