@@ -164,6 +164,7 @@ curl -X POST https://ttststtkurdifer-production.up.railway.app/tts \
 
 ### Option 3: Use cURL for STT
 ```bash
+# For local development
 curl -X POST http://localhost:5000/stt \
   -F "audio=@kurdish_audio.mp3"
 ```

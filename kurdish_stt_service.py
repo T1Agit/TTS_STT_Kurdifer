@@ -9,7 +9,7 @@ for speech recognition with proper Kurdish character support (ê, î, û, ç, ş
 import io
 import os
 import tempfile
-from typing import Dict, Optional, Any
+from typing import Dict, Any
 import torch
 import torchaudio
 from transformers import Wav2Vec2ForCTC, AutoProcessor
