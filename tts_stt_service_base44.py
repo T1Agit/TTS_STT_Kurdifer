@@ -34,7 +34,13 @@ class TTSSTTServiceBase44:
         self._coqui_tts = None  # Lazy initialization for Coqui TTS
         self._fine_tuned_model_path = None  # Path to fine-tuned Kurdish model
         self._use_fine_tuned = False  # Flag to indicate if fine-tuned model is loaded
+        
+        # VITS model support (HuggingFace transformers)
+        self._vits_models = {}  # Cache for VITS models: {model_name: (model, tokenizer)}
+        self._vits_model_paths = {}  # Available VITS model paths
+        
         self._check_fine_tuned_model()
+        self._check_vits_models()
     
     def _get_language_code(self, language: str) -> str:
         """
@@ -70,6 +76,205 @@ class TTSSTTServiceBase44:
                 return
         
         self._fine_tuned_model_path = None
+    
+    def _check_vits_models(self):
+        """Check for available VITS models (HuggingFace transformers)"""
+        vits_model_locations = {
+            'v8': [
+                "training/best_model_v8",
+                "./training/best_model_v8",
+                os.path.join(os.path.dirname(__file__), "training", "best_model_v8")
+            ],
+            'original': [
+                "facebook/mms-tts-kmr-script_latin"  # HuggingFace model ID
+            ]
+        }
+        
+        for model_name, locations in vits_model_locations.items():
+            for location in locations:
+                # Check if it's a HuggingFace model ID (no path separators)
+                if '/' in location and not os.path.exists(location):
+                    # It's a HuggingFace model ID like "facebook/mms-tts-kmr-script_latin"
+                    self._vits_model_paths[model_name] = location
+                    print(f"✅ VITS model '{model_name}' available from HuggingFace: {location}")
+                    break
+                
+                # Check if it's a local path with required files
+                config_path = os.path.join(location, "config.json") if os.path.exists(location) else ""
+                if config_path and os.path.exists(config_path):
+                    self._vits_model_paths[model_name] = location
+                    print(f"✅ VITS model '{model_name}' found at: {location}")
+                    break
+        
+        if not self._vits_model_paths:
+            print("ℹ️  No VITS models found. Kurdish TTS will use Coqui fallback.")
+        
+        return self._vits_model_paths
+    
+    def get_available_models(self, language: str = 'kurdish') -> Dict[str, any]:
+        """
+        Get list of available TTS models for a language
+        
+        Args:
+            language: Language to check models for
+            
+        Returns:
+            Dictionary with available models and their info
+        """
+        lang_code = self._get_language_code(language)
+        
+        if lang_code != 'ku':
+            return {
+                'language': lang_code,
+                'models': ['default'],
+                'default_model': 'default',
+                'info': 'This language uses gTTS (Google Text-to-Speech)'
+            }
+        
+        available_models = list(self._vits_model_paths.keys()) + ['coqui']
+        default_model = None
+        
+        # Determine default (prefer v8, then original, then coqui)
+        if 'v8' in self._vits_model_paths:
+            default_model = 'v8'
+        elif 'original' in self._vits_model_paths:
+            default_model = 'original'
+        else:
+            default_model = 'coqui'
+        
+        model_info = {}
+        for model_name in available_models:
+            if model_name in self._vits_model_paths:
+                model_info[model_name] = {
+                    'type': 'VITS',
+                    'path': self._vits_model_paths[model_name],
+                    'description': f'VITS model: {model_name}'
+                }
+            elif model_name == 'coqui':
+                model_info[model_name] = {
+                    'type': 'Coqui XTTS v2',
+                    'description': 'Fallback TTS using Turkish phonetics'
+                }
+        
+        return {
+            'language': lang_code,
+            'models': available_models,
+            'default_model': default_model,
+            'model_info': model_info
+        }
+    
+    def _load_vits_model(self, model_version: str = 'original'):
+        """
+        Load a VITS model from HuggingFace transformers
+        
+        Args:
+            model_version: Which model to load ('original' or 'v8')
+            
+        Returns:
+            Tuple of (model, tokenizer) or None if loading fails
+        """
+        # Check if already loaded
+        if model_version in self._vits_models:
+            return self._vits_models[model_version]
+        
+        # Check if model path exists
+        if model_version not in self._vits_model_paths:
+            print(f"❌ VITS model '{model_version}' not available")
+            return None
+        
+        model_path = self._vits_model_paths[model_version]
+        
+        try:
+            from transformers import VitsModel, VitsTokenizer
+            import torch
+            
+            print(f"🔧 Loading VITS model '{model_version}' from: {model_path}")
+            
+            # Load tokenizer and model
+            tokenizer = VitsTokenizer.from_pretrained(model_path)
+            model = VitsModel.from_pretrained(model_path)
+            
+            # Move to GPU if available
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            model = model.to(device)
+            model.eval()
+            
+            # Cache the loaded model
+            self._vits_models[model_version] = (model, tokenizer, device)
+            
+            print(f"✅ VITS model '{model_version}' loaded successfully on {device}")
+            return self._vits_models[model_version]
+            
+        except ImportError as e:
+            print(f"❌ transformers library not available: {e}")
+            print("   Install with: pip install transformers torch")
+            return None
+        except Exception as e:
+            print(f"❌ Error loading VITS model '{model_version}': {e}")
+            return None
+    
+    def _generate_speech_vits(self, text: str, model_version: str = 'original') -> bytes:
+        """
+        Generate speech using VITS model from HuggingFace transformers
+        
+        Args:
+            text: Text to convert to speech
+            model_version: Which model to use ('original' or 'v8')
+            
+        Returns:
+            Audio bytes in WAV format
+        """
+        try:
+            import torch
+            import scipy.io.wavfile as wavfile
+            
+            # Load model if needed
+            model_data = self._load_vits_model(model_version)
+            if model_data is None:
+                raise RuntimeError(f"Failed to load VITS model '{model_version}'")
+            
+            model, tokenizer, device = model_data
+            
+            print(f"   Generating speech with VITS '{model_version}' model...")
+            
+            # Tokenize input text
+            inputs = tokenizer(text, return_tensors="pt")
+            input_ids = inputs["input_ids"].to(device)
+            
+            # Generate speech
+            with torch.no_grad():
+                outputs = model(input_ids)
+                waveform = outputs.waveform.squeeze().cpu().numpy()
+            
+            # Convert to WAV bytes (16kHz, 16-bit)
+            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp_file:
+                temp_path = tmp_file.name
+            
+            wavfile.write(temp_path, rate=16000, data=(waveform * 32767).astype('int16'))
+            
+            # Read the WAV file
+            with open(temp_path, 'rb') as f:
+                wav_bytes = f.read()
+            
+            # Clean up
+            os.unlink(temp_path)
+            
+            # Convert WAV to MP3 using pydub
+            audio = AudioSegment.from_file(io.BytesIO(wav_bytes), format="wav")
+            output_buffer = io.BytesIO()
+            audio.export(output_buffer, format="mp3")
+            
+            print(f"   ✅ Generated {len(output_buffer.getvalue())} bytes with VITS '{model_version}'")
+            
+            return output_buffer.getvalue()
+            
+        except ImportError as e:
+            raise ImportError(
+                "Required libraries not installed. Please run: pip install transformers torch scipy\n"
+            ) from e
+        except Exception as e:
+            print(f"❌ VITS generation error: {e}")
+            raise RuntimeError(f"VITS generation failed: {e}") from e
     
     def _uses_coqui_tts(self, lang_code: str) -> bool:
         """
@@ -227,7 +432,8 @@ class TTSSTTServiceBase44:
         self,
         text: str,
         language: str = 'en',
-        audio_format: str = 'mp3'
+        audio_format: str = 'mp3',
+        model_version: str = None
     ) -> Dict[str, str]:
         """
         Convert text to speech and encode to Base44
@@ -236,6 +442,11 @@ class TTSSTTServiceBase44:
             text: Text to convert to speech
             language: Target language (e.g., 'en', 'english', 'ku')
             audio_format: Audio format ('mp3', 'wav', 'ogg')
+            model_version: For Kurdish - which model to use:
+                          - None (default): Auto-select best available
+                          - 'v8': Use fine-tuned VITS v8 model
+                          - 'original': Use original facebook/mms-tts-kmr-script_latin
+                          - 'coqui': Use Coqui XTTS v2 (fallback)
             
         Returns:
             Dictionary with audio data and metadata
@@ -246,10 +457,47 @@ class TTSSTTServiceBase44:
             
             print(f"🎤 Generating speech: '{text[:50]}...' in {lang_code}")
             
-            # Check if we need to use Coqui TTS for Kurdish
+            # Check if we need to use Kurdish TTS
             if self._uses_coqui_tts(lang_code):
-                # Generate speech using Coqui TTS
-                audio_bytes = self._generate_speech_coqui(text, lang_code)
+                # Determine which model to use
+                use_vits = False
+                selected_model = model_version
+                
+                # Auto-select if not specified
+                if selected_model is None:
+                    # Prefer v8 if available, then original, then Coqui fallback
+                    if 'v8' in self._vits_model_paths:
+                        selected_model = 'v8'
+                        use_vits = True
+                    elif 'original' in self._vits_model_paths:
+                        selected_model = 'original'
+                        use_vits = True
+                    else:
+                        selected_model = 'coqui'
+                elif selected_model in ['v8', 'original'] and selected_model in self._vits_model_paths:
+                    use_vits = True
+                elif selected_model == 'coqui':
+                    use_vits = False
+                else:
+                    # Invalid or unavailable model, use auto-selection
+                    print(f"⚠️  Model '{selected_model}' not available, auto-selecting...")
+                    if 'v8' in self._vits_model_paths:
+                        selected_model = 'v8'
+                        use_vits = True
+                    elif 'original' in self._vits_model_paths:
+                        selected_model = 'original'
+                        use_vits = True
+                    else:
+                        selected_model = 'coqui'
+                        use_vits = False
+                
+                # Generate speech with selected model
+                if use_vits:
+                    print(f"   Using VITS model: {selected_model}")
+                    audio_bytes = self._generate_speech_vits(text, selected_model)
+                else:
+                    print(f"   Using Coqui TTS fallback")
+                    audio_bytes = self._generate_speech_coqui(text, lang_code)
                 
                 # Encode to Base44
                 audio_base44 = encode(audio_bytes)
@@ -261,6 +509,7 @@ class TTSSTTServiceBase44:
                     'language': lang_code,
                     'format': audio_format,
                     'text': text,
+                    'model': selected_model,
                     'size': len(audio_bytes),
                     'encoded_size': len(audio_base44),
                     'compression_ratio': len(audio_base44) / len(audio_bytes)

@@ -228,6 +228,19 @@
                 </select>
             </div>
             
+            <div class="form-group" id="modelGroup" style="display: none;">
+                <label for="model">Select Model (Kurdish only):</label>
+                <select id="model" name="model">
+                    <option value="">🔄 Auto (best available)</option>
+                    <option value="v8">🎯 VITS v8 (Fine-tuned)</option>
+                    <option value="original">📦 Original (Facebook MMS)</option>
+                    <option value="coqui">🔊 Coqui XTTS v2 (Fallback)</option>
+                </select>
+                <div class="info" style="margin-top: 5px;">
+                    Choose a model to compare quality. Auto selects the best available.
+                </div>
+            </div>
+            
             <button type="submit" id="submitBtn">
                 🎵 Generate Speech
             </button>
@@ -256,9 +269,40 @@
         const audio = document.getElementById('audio');
         const audioInfo = document.getElementById('audioInfo');
         const submitBtn = document.getElementById('submitBtn');
+        const languageSelect = document.getElementById('language');
+        const modelGroup = document.getElementById('modelGroup');
+        const modelSelect = document.getElementById('model');
+        
+        // Show/hide model selection based on language
+        languageSelect.addEventListener('change', function() {
+            if (this.value === 'kurdish') {
+                modelGroup.style.display = 'block';
+                loadAvailableModels();
+            } else {
+                modelGroup.style.display = 'none';
+            }
+        });
         
         // Check API health on load
         checkAPIHealth();
+        
+        async function loadAvailableModels() {
+            try {
+                const response = await fetch(`${API_URL}/models?language=kurdish`);
+                const data = await response.json();
+                
+                if (data.success && data.data) {
+                    // Update model options based on available models
+                    const models = data.data.models || [];
+                    const defaultModel = data.data.default_model;
+                    
+                    console.log('Available models:', models);
+                    console.log('Default model:', defaultModel);
+                }
+            } catch (error) {
+                console.warn('Could not load available models:', error);
+            }
+        }
         
         async function checkAPIHealth() {
             try {
@@ -278,6 +322,7 @@
             
             const text = document.getElementById('text').value;
             const language = document.getElementById('language').value;
+            const model = language === 'kurdish' ? document.getElementById('model').value : null;
             
             // Hide audio player
             audioPlayer.classList.remove('show');
@@ -288,12 +333,17 @@
             showStatus('Generating speech... Please wait', 'loading');
             
             try {
+                const requestBody = { text, language };
+                if (model) {
+                    requestBody.model = model;
+                }
+                
                 const response = await fetch(`${API_URL}/tts`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ text, language })
+                    body: JSON.stringify(requestBody)
                 });
                 
                 if (!response.ok) {
@@ -318,9 +368,11 @@
                 
                 // Show info
                 const compressionRatio = (audioBytes.length / audioBase44.length).toFixed(2);
+                const modelUsed = data.model || 'default';
                 audioInfo.innerHTML = `
                     <strong>Text:</strong> ${text.substring(0, 50)}${text.length > 50 ? '...' : ''}<br>
                     <strong>Language:</strong> ${language}<br>
+                    ${language === 'kurdish' ? `<strong>Model:</strong> ${modelUsed}<br>` : ''}
                     <strong>Audio size:</strong> ${audioBytes.length} bytes<br>
                     <strong>Base44 size:</strong> ${audioBase44.length} chars<br>
                     <strong>Compression:</strong> ${compressionRatio}x

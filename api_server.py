@@ -39,17 +39,19 @@ def tts():
     data = request.json
     text = data.get('text')
     language = data.get('language', 'english')
+    model = data.get('model', None)  # Optional model selection for Kurdish
     
     if not text:
         return jsonify({'success': False, 'error': 'Missing text'}), 400
     
     try:
-        result = service.text_to_speech_base44(text, language)
+        result = service.text_to_speech_base44(text, language, model_version=model)
         return jsonify({
             'success': True,
             'audio': result['audio'],
             'format': result['format'],
-            'language': result['language']
+            'language': result['language'],
+            'model': result.get('model', 'default')
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -57,6 +59,16 @@ def tts():
 @app.route('/languages', methods=['GET'])
 def languages():
     return jsonify({'languages': list(service.SUPPORTED_LANGUAGES.keys())})
+
+@app.route('/models', methods=['GET'])
+def models():
+    """Get available models for a language"""
+    language = request.args.get('language', 'kurdish')
+    try:
+        available_models = service.get_available_models(language)
+        return jsonify({'success': True, 'data': available_models})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
