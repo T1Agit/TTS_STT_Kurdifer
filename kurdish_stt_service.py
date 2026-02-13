@@ -2,7 +2,7 @@
 """
 Kurdish STT (Speech-to-Text) Service
 
-Uses facebook/mms-1b-all model with Kurdish (Kurmanji) language adapter (kur)
+Uses facebook/mms-1b-all model with Kurdish (Kurmanji) language adapter (kmr-script_latin)
 for speech recognition with proper Kurdish character support (ê, î, û, ç, ş).
 """
 
@@ -28,7 +28,7 @@ class KurdishSTTService:
     
     # Model configuration
     MODEL_ID = "facebook/mms-1b-all"
-    TARGET_LANG = "kur"  # Kurdish (Kurmanji) - ISO 639-3 code
+    TARGET_LANG = "kmr-script_latin"  # Kurdish (Kurmanji) Latin script
     SAMPLE_RATE = 16000
     
     def __init__(self):
@@ -54,7 +54,7 @@ class KurdishSTTService:
         
         try:
             # Load processor
-            self.processor = AutoProcessor.from_pretrained(self.MODEL_ID)
+            self.processor = AutoProcessor.from_pretrained(self.MODEL_ID, target_lang=self.TARGET_LANG)
             
             # Load model
             self.model = Wav2Vec2ForCTC.from_pretrained(self.MODEL_ID)
