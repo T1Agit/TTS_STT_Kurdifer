@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Kurdish TTS/STT API - Convert text to speech in Kurdish, English, German, French, and Turkish with Base44 encoding">
-    <title>Kurdish TTS/STT API - Text to Speech</title>
+    <meta name="description" content="Kurdish TTS/STT - Text-to-Speech and Speech-to-Text for Kurdish language">
+    <title>Kurdish TTS/STT - Complete Language Tool</title>
     <style>
         * {
             margin: 0;
@@ -26,26 +26,66 @@
             background: white;
             border-radius: 20px;
             box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            padding: 40px;
-            max-width: 600px;
+            padding: 0;
+            max-width: 700px;
             width: 100%;
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px 40px;
+            text-align: center;
         }
         
         h1 {
-            color: #667eea;
-            margin-bottom: 10px;
-            text-align: center;
+            margin-bottom: 8px;
         }
         
         .subtitle {
-            color: #666;
-            text-align: center;
-            margin-bottom: 30px;
             font-size: 14px;
+            opacity: 0.9;
+        }
+        
+        .tabs {
+            display: flex;
+            background: #f8f9fa;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        
+        .tab {
+            flex: 1;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            font-weight: 600;
+            color: #666;
+            transition: all 0.3s;
+            border-bottom: 3px solid transparent;
+        }
+        
+        .tab:hover {
+            background: #e9ecef;
+        }
+        
+        .tab.active {
+            color: #667eea;
+            background: white;
+            border-bottom-color: #667eea;
+        }
+        
+        .tab-content {
+            display: none;
+            padding: 40px;
+        }
+        
+        .tab-content.active {
+            display: block;
         }
         
         .status {
-            padding: 10px;
+            padding: 12px;
             border-radius: 8px;
             margin-bottom: 20px;
             text-align: center;
@@ -67,8 +107,17 @@
             color: #721c24;
         }
         
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        
         .status.hidden {
             display: none;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
         }
         
         label {
@@ -78,19 +127,22 @@
             margin-bottom: 8px;
         }
         
-        textarea {
+        textarea, input[type="text"] {
             width: 100%;
             padding: 12px;
             border: 2px solid #e0e0e0;
             border-radius: 8px;
             font-size: 16px;
-            resize: vertical;
-            min-height: 120px;
             font-family: inherit;
             transition: border-color 0.3s;
         }
         
-        textarea:focus {
+        textarea {
+            resize: vertical;
+            min-height: 120px;
+        }
+        
+        textarea:focus, input:focus, select:focus {
             outline: none;
             border-color: #667eea;
         }
@@ -106,15 +158,6 @@
             transition: border-color 0.3s;
         }
         
-        select:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-        
-        .form-group {
-            margin-bottom: 20px;
-        }
-        
         button {
             width: 100%;
             padding: 15px;
@@ -128,12 +171,12 @@
             transition: transform 0.2s, box-shadow 0.2s;
         }
         
-        button:hover {
+        button:hover:not(:disabled) {
             transform: translateY(-2px);
             box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
         }
         
-        button:active {
+        button:active:not(:disabled) {
             transform: translateY(0);
         }
         
@@ -143,7 +186,36 @@
             transform: none;
         }
         
-        .audio-player {
+        .upload-area {
+            border: 2px dashed #e0e0e0;
+            border-radius: 8px;
+            padding: 30px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: #f8f9fa;
+        }
+        
+        .upload-area:hover {
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
+        
+        .upload-area.dragover {
+            border-color: #667eea;
+            background: #e6efff;
+        }
+        
+        .upload-icon {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+        
+        input[type="file"] {
+            display: none;
+        }
+        
+        .audio-player, .transcription-box {
             margin-top: 20px;
             padding: 20px;
             background: #f8f9fa;
@@ -151,7 +223,7 @@
             display: none;
         }
         
-        .audio-player.show {
+        .audio-player.show, .transcription-box.show {
             display: block;
         }
         
@@ -167,20 +239,30 @@
             line-height: 1.6;
         }
         
-        .footer {
-            margin-top: 30px;
-            text-align: center;
-            color: #999;
-            font-size: 12px;
+        .transcription-text {
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            font-size: 18px;
+            line-height: 1.6;
+            color: #333;
+            margin-bottom: 15px;
+            word-wrap: break-word;
+            border: 1px solid #e0e0e0;
         }
         
-        .footer a {
-            color: #667eea;
-            text-decoration: none;
+        .record-btn {
+            background: #dc3545;
+            margin-bottom: 15px;
         }
         
-        .footer a:hover {
-            text-decoration: underline;
+        .record-btn.recording {
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
         }
         
         .spinner {
@@ -197,92 +279,226 @@
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+        
+        .footer {
+            padding: 20px;
+            text-align: center;
+            color: #999;
+            font-size: 12px;
+            background: #f8f9fa;
+            border-top: 1px solid #e0e0e0;
+        }
+        
+        .footer a {
+            color: #667eea;
+            text-decoration: none;
+        }
+        
+        .footer a:hover {
+            text-decoration: underline;
+        }
+        
+        .kurdish-chars {
+            background: #fff3cd;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 14px;
+            margin-bottom: 15px;
+        }
+        
+        .char-buttons {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            margin-top: 8px;
+        }
+        
+        .char-btn {
+            padding: 8px 12px;
+            background: white;
+            border: 1px solid #667eea;
+            color: #667eea;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        
+        .char-btn:hover {
+            background: #667eea;
+            color: white;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🎤 Kurdish TTS/STT</h1>
-        <p class="subtitle">Text-to-Speech with Base44 Encoding</p>
+        <div class="header">
+            <h1>🎤 Kurdish Language Tool</h1>
+            <p class="subtitle">Text-to-Speech & Speech-to-Text</p>
+        </div>
         
-        <div id="status" class="status hidden"></div>
+        <div class="tabs">
+            <div class="tab active" data-tab="tts">
+                🔊 Text-to-Speech
+            </div>
+            <div class="tab" data-tab="stt">
+                🎙️ Speech-to-Text
+            </div>
+        </div>
         
-        <form id="ttsForm">
-            <div class="form-group">
-                <label for="text">Enter Text:</label>
-                <textarea 
-                    id="text" 
-                    name="text" 
-                    placeholder="Type something to convert to speech..."
-                    required
-                >Hello, how are you today?</textarea>
+        <!-- TTS Tab -->
+        <div class="tab-content active" id="tts-content">
+            <div id="tts-status" class="status hidden"></div>
+            
+            <div class="kurdish-chars">
+                <strong>Kurdish Special Characters:</strong>
+                <div class="char-buttons">
+                    <button type="button" class="char-btn" onclick="insertChar('ê')">ê</button>
+                    <button type="button" class="char-btn" onclick="insertChar('î')">î</button>
+                    <button type="button" class="char-btn" onclick="insertChar('û')">û</button>
+                    <button type="button" class="char-btn" onclick="insertChar('ç')">ç</button>
+                    <button type="button" class="char-btn" onclick="insertChar('ş')">ş</button>
+                </div>
+            </div>
+            
+            <form id="ttsForm">
+                <div class="form-group">
+                    <label for="text">Enter Kurdish Text:</label>
+                    <textarea 
+                        id="text" 
+                        name="text" 
+                        placeholder="Type Kurdish text here... (Silav, tu çawa yî?)"
+                        required
+                    >Silav, tu çawa yî?</textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label for="language">Select Language:</label>
+                    <select id="language" name="language" required>
+                        <option value="kurdish" selected>🟡🔴🟢 Kurdish (Kurdî)</option>
+                        <option value="english">🇬🇧 English</option>
+                        <option value="german">🇩🇪 German (Deutsch)</option>
+                        <option value="french">🇫🇷 French (Français)</option>
+                        <option value="turkish">🇹🇷 Turkish (Türkçe)</option>
+                    </select>
+                </div>
+                
+                <div class="form-group" id="modelGroup">
+                    <label for="model">Kurdish TTS Model:</label>
+                    <select id="model" name="model">
+                        <option value="original">Original (MMS Base Model)</option>
+                        <option value="trained_v8">Trained v8 (Fine-tuned)</option>
+                    </select>
+                </div>
+                
+                <button type="submit" id="ttsSubmitBtn">
+                    🎵 Generate Speech
+                </button>
+            </form>
+            
+            <div id="audioPlayer" class="audio-player">
+                <h3>🔊 Generated Audio:</h3>
+                <audio id="audio" controls></audio>
+                <div class="info" id="audioInfo"></div>
+            </div>
+        </div>
+        
+        <!-- STT Tab -->
+        <div class="tab-content" id="stt-content">
+            <div id="stt-status" class="status hidden"></div>
+            
+            <div class="kurdish-chars">
+                <strong>Supports Kurdish Characters:</strong> ê, î, û, ç, ş
             </div>
             
             <div class="form-group">
-                <label for="language">Select Language:</label>
-                <select id="language" name="language" required>
-                    <option value="english">🇬🇧 English</option>
-                    <option value="german">🇩🇪 German (Deutsch)</option>
-                    <option value="french">🇫🇷 French (Français)</option>
-                    <option value="turkish">🇹🇷 Turkish (Türkçe)</option>
-                    <option value="kurdish">🟡🔴🟢 Kurdish (Kurdî)</option>
-                </select>
+                <label>Upload Audio File:</label>
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-icon">📁</div>
+                    <p><strong>Click to browse</strong> or drag and drop</p>
+                    <p style="font-size: 12px; color: #666; margin-top: 5px;">
+                        Supports: MP3, WAV, OGG, WebM
+                    </p>
+                </div>
+                <input type="file" id="audioFile" accept="audio/*">
             </div>
             
-            <div class="form-group" id="modelGroup" style="display: none;">
-                <label for="model">Kurdish TTS Model:</label>
-                <select id="model" name="model">
-                    <option value="original">Original (MMS Base Model)</option>
-                    <option value="trained_v8">Trained v8 (Fine-tuned)</option>
-                </select>
+            <div style="text-align: center; margin: 20px 0; color: #999;">
+                <strong>— OR —</strong>
             </div>
             
-            <button type="submit" id="submitBtn">
-                🎵 Generate Speech
+            <button type="button" id="recordBtn" class="record-btn">
+                🎙️ Record Audio
             </button>
-        </form>
-        
-        <div id="audioPlayer" class="audio-player">
-            <h3>🔊 Generated Audio:</h3>
-            <audio id="audio" controls></audio>
-            <div class="info" id="audioInfo"></div>
+            
+            <button type="button" id="transcribeBtn" style="display: none;">
+                ✍️ Transcribe Audio
+            </button>
+            
+            <div id="transcriptionBox" class="transcription-box">
+                <h3>📝 Transcription:</h3>
+                <div class="transcription-text" id="transcriptionText"></div>
+                <div class="info" id="transcriptionInfo"></div>
+            </div>
         </div>
         
         <div class="footer">
             Powered by <a href="https://github.com/T1Agit/TTS_STT_Kurdifer" target="_blank">TTS_STT_Kurdifer</a><br>
-            API: <a href="https://ttssttkurdifer-production.up.railway.app" target="_blank">Railway</a>
+            MMS Kurdish TTS/STT • Base44 Encoding
         </div>
     </div>
 
     <script src="base44.js"></script>
     <script>
-        // Auto-detect API URL based on current location
+        // Auto-detect API URL
         const API_URL = window.location.origin;
         
-        const form = document.getElementById('ttsForm');
-        const statusDiv = document.getElementById('status');
+        // Tab switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                const tabName = tab.dataset.tab;
+                
+                // Update tabs
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                
+                // Update content
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                document.getElementById(`${tabName}-content`).classList.add('active');
+            });
+        });
+        
+        // Kurdish character insertion
+        function insertChar(char) {
+            const textarea = document.getElementById('text');
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const text = textarea.value;
+            textarea.value = text.substring(0, start) + char + text.substring(end);
+            textarea.selectionStart = textarea.selectionEnd = start + 1;
+            textarea.focus();
+        }
+        
+        // TTS functionality
+        const ttsForm = document.getElementById('ttsForm');
+        const ttsStatusDiv = document.getElementById('tts-status');
         const audioPlayer = document.getElementById('audioPlayer');
         const audio = document.getElementById('audio');
         const audioInfo = document.getElementById('audioInfo');
-        const submitBtn = document.getElementById('submitBtn');
+        const ttsSubmitBtn = document.getElementById('ttsSubmitBtn');
         const languageSelect = document.getElementById('language');
         const modelGroup = document.getElementById('modelGroup');
         const modelSelect = document.getElementById('model');
         
-        // Show/hide model selector based on language
+        // Show/hide model selector
         function updateModelSelector() {
-            if (languageSelect.value === 'kurdish') {
-                modelGroup.style.display = 'block';
-            } else {
-                modelGroup.style.display = 'none';
-            }
+            modelGroup.style.display = languageSelect.value === 'kurdish' ? 'block' : 'none';
         }
         
         languageSelect.addEventListener('change', updateModelSelector);
-        
-        // Check initial state on page load
         updateModelSelector();
         
-        // Check API health on load
+        // Check API health
         checkAPIHealth();
         
         async function checkAPIHealth() {
@@ -290,28 +506,25 @@
                 const response = await fetch(`${API_URL}/health`);
                 const data = await response.json();
                 if (data.status === 'healthy') {
-                    showStatus('API is online and ready! 🟢', 'success');
-                    setTimeout(() => hideStatus(), 3000);
+                    showTTSStatus('API is online! 🟢', 'success');
+                    setTimeout(() => hideTTSStatus(), 3000);
                 }
             } catch (error) {
-                showStatus('Warning: API might be offline', 'error');
+                showTTSStatus('Warning: API might be offline', 'error');
             }
         }
         
-        form.addEventListener('submit', async (e) => {
+        ttsForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             
             const text = document.getElementById('text').value;
-            const language = document.getElementById('language').value;
+            const language = languageSelect.value;
             const modelVersion = modelSelect.value;
             
-            // Hide audio player
             audioPlayer.classList.remove('show');
-            
-            // Show loading
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = '<span class="spinner"></span> Generating...';
-            showStatus('Generating speech... Please wait', 'loading');
+            ttsSubmitBtn.disabled = true;
+            ttsSubmitBtn.innerHTML = '<span class="spinner"></span> Generating...';
+            showTTSStatus('Generating speech... Please wait', 'loading');
             
             try {
                 const requestBody = { text, language };
@@ -321,9 +534,7 @@
                 
                 const response = await fetch(`${API_URL}/tts`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(requestBody)
                 });
                 
@@ -348,13 +559,10 @@
                 audioPlayer.classList.add('show');
                 
                 // Show info
-                const compressionRatio = (audioBytes.length / audioBase44.length).toFixed(2);
                 let infoHtml = `
                     <strong>Text:</strong> ${text.substring(0, 50)}${text.length > 50 ? '...' : ''}<br>
                     <strong>Language:</strong> ${language}<br>
-                    <strong>Audio size:</strong> ${audioBytes.length} bytes<br>
-                    <strong>Base44 size:</strong> ${audioBase44.length} chars<br>
-                    <strong>Compression:</strong> ${compressionRatio}x
+                    <strong>Audio size:</strong> ${audioBytes.length} bytes
                 `;
                 
                 if (language === 'kurdish' && data.model) {
@@ -362,28 +570,194 @@
                 }
                 
                 audioInfo.innerHTML = infoHtml;
-                
-                showStatus('✅ Speech generated successfully!', 'success');
-                
-                // Auto play
+                showTTSStatus('✅ Speech generated successfully!', 'success');
                 audio.play().catch(e => console.log('Auto-play prevented:', e));
                 
             } catch (error) {
                 console.error('Error:', error);
-                showStatus(`❌ Error: ${error.message}`, 'error');
+                showTTSStatus(`❌ Error: ${error.message}`, 'error');
             } finally {
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = '🎵 Generate Speech';
+                ttsSubmitBtn.disabled = false;
+                ttsSubmitBtn.innerHTML = '🎵 Generate Speech';
             }
         });
         
-        function showStatus(message, type) {
-            statusDiv.textContent = message;
-            statusDiv.className = `status ${type}`;
+        function showTTSStatus(message, type) {
+            ttsStatusDiv.textContent = message;
+            ttsStatusDiv.className = `status ${type}`;
         }
         
-        function hideStatus() {
-            statusDiv.className = 'status hidden';
+        function hideTTSStatus() {
+            ttsStatusDiv.className = 'status hidden';
+        }
+        
+        // STT functionality
+        const sttStatusDiv = document.getElementById('stt-status');
+        const uploadArea = document.getElementById('uploadArea');
+        const audioFile = document.getElementById('audioFile');
+        const recordBtn = document.getElementById('recordBtn');
+        const transcribeBtn = document.getElementById('transcribeBtn');
+        const transcriptionBox = document.getElementById('transcriptionBox');
+        const transcriptionText = document.getElementById('transcriptionText');
+        const transcriptionInfo = document.getElementById('transcriptionInfo');
+        
+        let selectedAudioFile = null;
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let isRecording = false;
+        
+        // Upload area interactions
+        uploadArea.addEventListener('click', () => audioFile.click());
+        
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+        
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFileSelect(files[0]);
+            }
+        });
+        
+        audioFile.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFileSelect(e.target.files[0]);
+            }
+        });
+        
+        function handleFileSelect(file) {
+            selectedAudioFile = file;
+            uploadArea.innerHTML = `
+                <div class="upload-icon">✅</div>
+                <p><strong>${file.name}</strong></p>
+                <p style="font-size: 12px; color: #666;">
+                    ${(file.size / 1024).toFixed(2)} KB
+                </p>
+            `;
+            transcribeBtn.style.display = 'block';
+            transcriptionBox.classList.remove('show');
+        }
+        
+        // Recording functionality
+        recordBtn.addEventListener('click', async () => {
+            if (!isRecording) {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    mediaRecorder = new MediaRecorder(stream);
+                    audioChunks = [];
+                    
+                    mediaRecorder.ondataavailable = (e) => {
+                        audioChunks.push(e.data);
+                    };
+                    
+                    mediaRecorder.onstop = async () => {
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                        selectedAudioFile = new File([audioBlob], 'recording.webm', { type: 'audio/webm' });
+                        
+                        uploadArea.innerHTML = `
+                            <div class="upload-icon">🎙️</div>
+                            <p><strong>Recorded Audio</strong></p>
+                            <p style="font-size: 12px; color: #666;">
+                                ${(audioBlob.size / 1024).toFixed(2)} KB
+                            </p>
+                        `;
+                        
+                        transcribeBtn.style.display = 'block';
+                        stream.getTracks().forEach(track => track.stop());
+                    };
+                    
+                    mediaRecorder.start();
+                    isRecording = true;
+                    recordBtn.classList.add('recording');
+                    recordBtn.textContent = '⏹️ Stop Recording';
+                    showSTTStatus('Recording... Speak now', 'loading');
+                    
+                } catch (error) {
+                    console.error('Error accessing microphone:', error);
+                    showSTTStatus('❌ Error: Cannot access microphone', 'error');
+                }
+            } else {
+                mediaRecorder.stop();
+                isRecording = false;
+                recordBtn.classList.remove('recording');
+                recordBtn.textContent = '🎙️ Record Audio';
+                showSTTStatus('✅ Recording stopped', 'success');
+            }
+        });
+        
+        // Transcription
+        transcribeBtn.addEventListener('click', async () => {
+            if (!selectedAudioFile) {
+                showSTTStatus('❌ No audio file selected', 'error');
+                return;
+            }
+            
+            transcribeBtn.disabled = true;
+            transcribeBtn.innerHTML = '<span class="spinner"></span> Transcribing...';
+            showSTTStatus('Transcribing Kurdish speech... Please wait', 'loading');
+            transcriptionBox.classList.remove('show');
+            
+            try {
+                // Read file as base64 for sending
+                const formData = new FormData();
+                formData.append('audio', selectedAudioFile);
+                
+                const response = await fetch(`${API_URL}/stt`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.error || 'Transcription failed');
+                }
+                
+                // Display transcription
+                transcriptionText.textContent = data.text;
+                
+                let infoHtml = `
+                    <strong>Language:</strong> ${data.language}<br>
+                    <strong>Duration:</strong> ${data.duration ? data.duration.toFixed(2) + 's' : 'N/A'}
+                `;
+                
+                if (data.confidence) {
+                    infoHtml += `<br><strong>Confidence:</strong> ${(data.confidence * 100).toFixed(1)}%`;
+                }
+                
+                transcriptionInfo.innerHTML = infoHtml;
+                transcriptionBox.classList.add('show');
+                showSTTStatus('✅ Transcription complete!', 'success');
+                
+            } catch (error) {
+                console.error('Error:', error);
+                showSTTStatus(`❌ Error: ${error.message}`, 'error');
+            } finally {
+                transcribeBtn.disabled = false;
+                transcribeBtn.innerHTML = '✍️ Transcribe Audio';
+            }
+        });
+        
+        function showSTTStatus(message, type) {
+            sttStatusDiv.textContent = message;
+            sttStatusDiv.className = `status ${type}`;
+        }
+        
+        function hideSTTStatus() {
+            sttStatusDiv.className = 'status hidden';
         }
     </script>
 </body>
