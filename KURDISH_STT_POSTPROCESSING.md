@@ -121,8 +121,8 @@ Output: "çend salî yî"
 
 ### Numbers
 ```
-Input:  "car cin penc ses"
-Output: "çar çin pênc şeş"
+Input:  "car se penc ses"
+Output: "çar sê pênc şeş"
 ```
 
 ### Family Words

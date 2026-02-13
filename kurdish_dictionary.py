@@ -688,14 +688,6 @@ KURDISH_CORRECTIONS = {
     "xêr": "xêr",
     "Xer": "Xêr",
     "Xêr": "Xêr",
-    "ber": "bêr",
-    "bêr": "bêr",
-    "Ber": "Bêr",
-    "Bêr": "Bêr",
-    "der": "dêr",
-    "dêr": "dêr",
-    "Der": "Dêr",
-    "Dêr": "Dêr",
     "pir": "pir",
     "Pir": "Pir",
     "gelek": "gelek",
@@ -814,8 +806,6 @@ KURDISH_CORRECTIONS = {
     "Pembe": "Pembe",
     
     # Animals
-    "se": "se",
-    "Se": "Se",
     "pising": "pisîng",
     "pisîng": "pisîng",
     "Pising": "Pisîng",

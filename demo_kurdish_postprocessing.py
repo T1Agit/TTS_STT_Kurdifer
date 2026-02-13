@@ -41,7 +41,7 @@ def main():
         ("cend sali yi", "How old are you?"),
         
         # Numbers
-        ("car cin penc ses", "4 5 6"),
+        ("car se penc ses", "4 3 5 6"),
         ("yek du se", "1 2 3"),
         
         # Common words
