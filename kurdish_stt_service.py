@@ -9,7 +9,7 @@ for speech recognition with proper Kurdish character support (ê, î, û, ç, ş
 import io
 import os
 import tempfile
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 import torch
 import torchaudio
 from transformers import Wav2Vec2ForCTC, AutoProcessor
@@ -120,7 +120,7 @@ class KurdishSTTService:
         self,
         audio_input,
         return_confidence: bool = False
-    ) -> Dict[str, any]:
+    ) -> Dict[str, Any]:
         """
         Transcribe Kurdish speech to text
         
@@ -183,7 +183,7 @@ class KurdishSTTService:
         self,
         file_path: str,
         return_confidence: bool = False
-    ) -> Dict[str, any]:
+    ) -> Dict[str, Any]:
         """
         Transcribe audio file to Kurdish text
         
@@ -203,7 +203,7 @@ class KurdishSTTService:
         self,
         audio_bytes: bytes,
         return_confidence: bool = False
-    ) -> Dict[str, any]:
+    ) -> Dict[str, Any]:
         """
         Transcribe audio bytes to Kurdish text
         

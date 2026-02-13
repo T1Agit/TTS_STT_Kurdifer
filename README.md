@@ -100,9 +100,14 @@ Content-Type: application/json
 }
 ```
 
-**Or upload file:**
+**Or upload file (local example):**
 ```bash
+# Local development
 curl -X POST http://localhost:5000/stt \
+  -F "audio=@kurdish_audio.mp3"
+
+# Production
+curl -X POST https://ttststtkurdifer-production.up.railway.app/stt \
   -F "audio=@kurdish_audio.mp3"
 ```
 
