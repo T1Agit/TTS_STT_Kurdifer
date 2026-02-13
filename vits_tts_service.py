@@ -10,6 +10,7 @@ import io
 import os
 import re
 import tempfile
+import threading
 import wave
 from pathlib import Path
 from typing import Optional, Dict, List, Tuple
@@ -72,6 +73,7 @@ class VitsTTSService:
         self.models_cache = {}
         self.tokenizers_cache = {}
         self.default_model = default_model
+        self._config_lock = threading.Lock()  # Lock for thread-safe config modifications
         
         print(f"🎤 VITS TTS Service initialized")
         print(f"   Device: {self.device}")
@@ -265,23 +267,25 @@ class VitsTTSService:
             speaking_rate = 0.95  # Slightly slower
         # For ',' and default/none, use default values (0.667, 1.0)
         
-        # Save original config values
-        original_noise_scale = model.config.noise_scale
-        original_speaking_rate = model.config.speaking_rate
-        
-        try:
-            # Apply intonation settings via config
-            model.config.noise_scale = noise_scale
-            model.config.speaking_rate = speaking_rate
+        # Use lock to ensure thread-safe config modification
+        with self._config_lock:
+            # Save original config values
+            original_noise_scale = model.config.noise_scale
+            original_speaking_rate = model.config.speaking_rate
             
-            # Generate speech (no extra kwargs!)
-            with torch.no_grad():
-                outputs = model(input_ids)
-                waveform = outputs.waveform.squeeze()
-        finally:
-            # Always restore original config values
-            model.config.noise_scale = original_noise_scale
-            model.config.speaking_rate = original_speaking_rate
+            try:
+                # Apply intonation settings via config
+                model.config.noise_scale = noise_scale
+                model.config.speaking_rate = speaking_rate
+                
+                # Generate speech (no extra kwargs!)
+                with torch.no_grad():
+                    outputs = model(input_ids)
+                    waveform = outputs.waveform.squeeze()
+            finally:
+                # Always restore original config values
+                model.config.noise_scale = original_noise_scale
+                model.config.speaking_rate = original_speaking_rate
         
         # Move to CPU and convert to numpy
         waveform_cpu = waveform.cpu()
