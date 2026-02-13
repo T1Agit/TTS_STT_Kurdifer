@@ -57,14 +57,19 @@ def tts():
     data = request.json
     text = data.get('text')
     language = data.get('language', 'english')
-    model_version = data.get('model_version', 'original')  # Support model selection for Kurdish
     voice_preset = data.get('voice_preset', 'default')  # Support voice presets
+    
+    # Default model_version based on language
+    if language in ['kurdish', 'ku']:
+        model_version = data.get('model_version', 'trained_v8')  # Kurdish default: trained_v8
+    else:
+        model_version = data.get('model_version', 'original')  # Other languages: original
     
     if not text:
         return jsonify({'success': False, 'error': 'Missing text'}), 400
     
     # Validate model_version is only used for Kurdish
-    if model_version and model_version != 'original' and language not in ['kurdish', 'ku']:
+    if 'model_version' in data and model_version != 'original' and language not in ['kurdish', 'ku']:
         return jsonify({
             'success': False, 
             'error': 'model_version parameter is only supported for Kurdish language'
