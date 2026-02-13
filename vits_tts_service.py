@@ -10,10 +10,11 @@ import io
 import os
 import re
 import tempfile
+import wave
 from pathlib import Path
 from typing import Optional, Dict, List, Tuple
+import numpy as np
 import torch
-import torchaudio
 from transformers import VitsModel, VitsTokenizer
 from pydub import AudioSegment
 
@@ -248,13 +249,18 @@ class VitsTTSService:
             temp_path = tmp_file.name
         
         try:
-            # Save waveform (VITS outputs at 16kHz)
-            torchaudio.save(
-                temp_path,
-                waveform_cpu.unsqueeze(0),
-                sample_rate=16000,
-                format='wav'
-            )
+            # Convert to numpy array and prepare for WAV writing
+            waveform_np = waveform_cpu.numpy()
+            # Clip to [-1, 1] range and convert to int16
+            waveform_np = np.clip(waveform_np, -1.0, 1.0)
+            waveform_int16 = (waveform_np * 32767).astype(np.int16)
+            
+            # Write WAV file using Python's built-in wave module
+            with wave.open(temp_path, 'wb') as wf:
+                wf.setnchannels(1)  # Mono
+                wf.setsampwidth(2)  # 16-bit
+                wf.setframerate(16000)  # 16kHz sample rate
+                wf.writeframes(waveform_int16.tobytes())
             
             # Load as AudioSegment
             audio_segment = AudioSegment.from_file(temp_path, format="wav")
