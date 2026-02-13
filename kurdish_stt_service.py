@@ -61,7 +61,7 @@ class KurdishSTTService:
             
             # Load target language adapter
             self.model.load_adapter(self.TARGET_LANG)
-            self.model.set_target_lang(self.TARGET_LANG)
+            self.model.target_lang = self.TARGET_LANG
             
             # Move to device
             self.model = self.model.to(self.device)
