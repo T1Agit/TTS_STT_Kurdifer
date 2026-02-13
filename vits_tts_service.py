@@ -265,10 +265,23 @@ class VitsTTSService:
             speaking_rate = 0.95  # Slightly slower
         # For ',' and default/none, use default values (0.667, 1.0)
         
-        # Generate speech with intonation parameters
-        with torch.no_grad():
-            outputs = model(input_ids, noise_scale=noise_scale, speaking_rate=speaking_rate)
-            waveform = outputs.waveform.squeeze()
+        # Save original config values
+        original_noise_scale = model.config.noise_scale
+        original_speaking_rate = model.config.speaking_rate
+        
+        try:
+            # Apply intonation settings via config
+            model.config.noise_scale = noise_scale
+            model.config.speaking_rate = speaking_rate
+            
+            # Generate speech (no extra kwargs!)
+            with torch.no_grad():
+                outputs = model(input_ids)
+                waveform = outputs.waveform.squeeze()
+        finally:
+            # Always restore original config values
+            model.config.noise_scale = original_noise_scale
+            model.config.speaking_rate = original_speaking_rate
         
         # Move to CPU and convert to numpy
         waveform_cpu = waveform.cpu()
