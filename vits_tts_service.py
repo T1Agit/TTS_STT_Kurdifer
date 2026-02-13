@@ -268,10 +268,12 @@ class VitsTTSService:
         # For ',' and default/none, use default values (0.667, 1.0)
         
         # Use lock to ensure thread-safe config modification
+        # Note: Each VitsTTSService instance has its own models_cache, so the lock
+        # provides thread safety for concurrent requests to the same service instance
         with self._config_lock:
-            # Save original config values
-            original_noise_scale = model.config.noise_scale
-            original_speaking_rate = model.config.speaking_rate
+            # Save original config values (with defaults if attributes don't exist)
+            original_noise_scale = getattr(model.config, 'noise_scale', 0.667)
+            original_speaking_rate = getattr(model.config, 'speaking_rate', 1.0)
             
             try:
                 # Apply intonation settings via config
