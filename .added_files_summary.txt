@@ -1,0 +1,106 @@
+# Summary of Added Files
+
+## Files Added in This PR
+
+### 1. train_vits_v8.py (23.5KB)
+Latest working training script with normalized loss and amplitude preservation.
+
+Key features:
+- Normalized loss computation to prevent gradient collapse
+- Amplitude preservation to prevent silent model problem
+- Real-time monitoring of amplitude status (OK/WARNING/CRITICAL)
+- Performance metrics tracking (loss, speed, amplitude)
+- Optimized for ~7 sps training speed
+- Default configuration: 1500 samples, ~3.6 min per epoch
+- Supports FP16 mixed precision training (enabled by default)
+- Comprehensive checkpoint and statistics saving
+
+Training metrics:
+- Target amplitude: 0.85 (configurable)
+- Amplitude monitoring with status indicators
+- Loss tracking: total, normalized, and amplitude components
+- Speed tracking: samples per second (sps)
+- Time tracking: per epoch and total
+
+### 2. test_v6.py (15.6KB)
+Model comparison test script for evaluating trained vs original models.
+
+Key features:
+- Loads both original and trained VITS models
+- Generates audio samples with both models
+- Comprehensive quality metrics comparison:
+  * Audio amplitude (max, mean, RMS)
+  * Silence detection
+  * Generation time
+  * Energy levels
+  * Zero crossing rate
+- Saves audio outputs and JSON results
+- Support for multiple test texts
+- Automatic device selection (CUDA/CPU)
+
+Output structure:
+- comparison_results.json: Detailed metrics and comparison
+- original_audio/: Audio files from original model
+- trained_audio/: Audio files from trained model
+
+### 3. TRAINING_V8_README.md (9.4KB)
+Comprehensive documentation for v8 training and v6 testing.
+
+Contents:
+- Usage instructions for both scripts
+- Parameter descriptions and examples
+- Training workflow (prepare → train → test)
+- Metrics explanation (amplitude, loss, speed)
+- Comparison metrics documentation
+- Troubleshooting guide (silent model, OOM, etc.)
+- Version history
+- Integration with existing pipeline
+
+## Technical Improvements
+
+### Normalized Loss Implementation
+The v8 script implements normalized loss to prevent the "silent model" problem:
+1. Base loss from VITS model (mel spectrogram reconstruction)
+2. Normalization by mel energy to prevent gradient collapse
+3. Amplitude preservation term weighted by configurable parameter
+
+Formula:
+```
+normalized_loss = base_loss / (mel_energy + eps)
+amp_loss = L1(estimated_amplitude, target_amplitude)
+total_loss = normalized_loss + amplitude_weight * amp_loss
+```
+
+### Amplitude Monitoring
+- Tracks estimated amplitude from mel spectrogram energy
+- Provides real-time status (OK/WARNING/CRITICAL)
+- Maintains history window for averaging
+- Saves amplitude in checkpoints for analysis
+
+### Performance Optimization
+- Gradient accumulation (default: 8 steps)
+- Mixed precision (FP16) training
+- Efficient mel spectrogram computation with cached transform
+- Optimized dataloader with appropriate num_workers
+
+## Integration with Existing Code
+
+The new scripts integrate seamlessly with existing pipeline:
+1. Use existing `prepare_data.py` for data preparation
+2. Replace `train_vits.py` with `train_vits_v8.py` for improved training
+3. Use `test_v6.py` to evaluate and compare models
+4. Can still use `train_feedback.py` for incremental improvements
+
+## Dependencies
+All dependencies already exist in requirements.txt:
+- torch>=2.0.0
+- torchaudio>=2.0.0
+- transformers>=4.30.0
+- numpy
+- tqdm
+
+No new dependencies were added.
+
+## Security
+CodeQL analysis: ✅ No security vulnerabilities found
+Code review: ✅ All critical issues addressed
