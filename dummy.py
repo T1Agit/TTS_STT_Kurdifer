@@ -16,13 +16,13 @@ def dummy_function():
 
 def dummy_echo(message):
     """
-    A dummy echo function that returns the input message.
+    A dummy echo function that returns the input message with an 'Echo: ' prefix.
     
     Args:
         message (str): The message to echo
         
     Returns:
-        str: The echoed message
+        str: The message prefixed with 'Echo: '
     """
     return f"Echo: {message}"
 
