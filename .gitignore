@@ -25,6 +25,9 @@ env/
 # Training artifacts
 training/
 !training/.gitkeep
+!training/best_model_v8/
+!training/best_model_v8/.gitkeep
+!training/best_model_v8/README.md
 *.pt
 *.pth
 *.ckpt

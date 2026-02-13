@@ -1,16 +1,34 @@
 # 🎤 Kurdish TTS/STT API with Base44 Encoding
 
-A multilingual Text-to-Speech (TTS) and Speech-to-Text (STT) API with custom Base44 encoding for efficient audio transfer. **Now featuring high-quality Kurdish (Kurmanji) TTS with Coqui XTTS v2!**
+A multilingual Text-to-Speech (TTS) and Speech-to-Text (STT) API with custom Base44 encoding for efficient audio transfer. **Now featuring high-quality Kurdish (Kurmanji) TTS with VITS v8 fine-tuned model and A/B testing support!**
 
 ## 🌟 Features
 
 - **5 Languages**: Kurdish (Kurdî), English, German, French, Turkish
-- **Kurdish XTTS v2**: High-quality neural TTS for Kurdish using state-of-the-art multilingual model
+- **Kurdish TTS with Multiple Models**:
+  - **VITS v8**: Fine-tuned on Kurdish Common Voice (best quality)
+  - **Original**: Facebook MMS-TTS base model
+  - **Coqui XTTS v2**: Fallback using Turkish phonetics
+- **Model Selection & A/B Testing**: Compare models side-by-side
 - **Base44 Encoding**: Efficient audio encoding (1.47x compression)
-- **REST API**: Simple HTTP endpoints
-- **Web UI**: Browser-based interface
+- **REST API**: Simple HTTP endpoints with model selection
+- **Web UI**: Browser-based interface with model switcher
 - **Railway Deployed**: Live 24/7
 - **Secure**: Zero npm vulnerabilities, secure Python dependencies
+
+---
+
+## 🎯 New: VITS v8 Integration
+
+The app now supports fine-tuned VITS models for Kurdish TTS! Place your trained model in `training/best_model_v8/` and the system will automatically detect and use it.
+
+**Key Benefits:**
+- ✅ Better pronunciation and naturalness
+- ✅ Fine-tuned on Kurdish Common Voice dataset
+- ✅ A/B comparison with original model
+- ✅ Easy model swapping for continuous improvement
+
+📖 **See [VITS_V8_INTEGRATION.md](VITS_V8_INTEGRATION.md) for complete integration guide**
 
 ---
 
@@ -57,13 +75,50 @@ Content-Type: application/json
 }
 ```
 
+**With model selection (Kurdish only):**
+```bash
+POST /tts
+Content-Type: application/json
+
+{
+  "text": "Silav, tu çawa yî?",
+  "language": "kurdish",
+  "model": "v8"
+}
+```
+
 **Response:**
 ```json
 {
+  "success": true,
   "audio": "DAMc3XX6M5QeVe66PDYfMO8fLGGc...",
   "format": "mp3",
-  "language": "english",
-  "size": 8973
+  "language": "ku",
+  "model": "v8"
+}
+```
+
+**Model options for Kurdish:**
+- `null` or omitted: Auto-select best available (default)
+- `"v8"`: Use fine-tuned VITS v8 model
+- `"original"`: Use Facebook MMS base model
+- `"coqui"`: Use Coqui XTTS v2 fallback
+
+### 4. Get Available Models
+```bash
+GET /models?language=kurdish
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "language": "ku",
+    "models": ["v8", "original", "coqui"],
+    "default_model": "v8",
+    "model_info": { ... }
+  }
 }
 ```
 
