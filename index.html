@@ -391,6 +391,15 @@
                     </select>
                 </div>
                 
+                <div class="form-group">
+                    <label for="voicePreset">Voice Preset:</label>
+                    <select id="voicePreset" name="voicePreset">
+                        <option value="default">Default Voice</option>
+                        <option value="elderly_male">👴 Elderly Male</option>
+                        <option value="elderly_female">👵 Elderly Female</option>
+                    </select>
+                </div>
+                
                 <button type="submit" id="ttsSubmitBtn">
                     🎵 Generate Speech
                 </button>
@@ -520,6 +529,7 @@
             const text = document.getElementById('text').value;
             const language = languageSelect.value;
             const modelVersion = modelSelect.value;
+            const voicePreset = document.getElementById('voicePreset').value;
             
             audioPlayer.classList.remove('show');
             ttsSubmitBtn.disabled = true;
@@ -527,7 +537,7 @@
             showTTSStatus('Generating speech... Please wait', 'loading');
             
             try {
-                const requestBody = { text, language };
+                const requestBody = { text, language, voice_preset: voicePreset };
                 if (language === 'kurdish') {
                     requestBody.model_version = modelVersion;
                 }
@@ -562,7 +572,8 @@
                 let infoHtml = `
                     <strong>Text:</strong> ${text.substring(0, 50)}${text.length > 50 ? '...' : ''}<br>
                     <strong>Language:</strong> ${language}<br>
-                    <strong>Audio size:</strong> ${audioBytes.length} bytes
+                    <strong>Audio size:</strong> ${audioBytes.length} bytes<br>
+                    <strong>Voice preset:</strong> ${voicePreset}
                 `;
                 
                 if (language === 'kurdish' && data.model) {

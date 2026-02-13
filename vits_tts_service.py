@@ -30,6 +30,13 @@ class VitsTTSService:
     
     # Audio conversion constants
     INT16_MAX = 32767  # Maximum value for 16-bit signed integer
+    SAMPLE_RATE = 16000  # VITS model output sample rate
+    
+    # Voice preset constants
+    ELDERLY_MALE_PITCH_SHIFT = 1.15  # Lower pitch by ~15%
+    ELDERLY_MALE_SPEED = 0.9  # Slow to 90% speed
+    ELDERLY_FEMALE_PITCH_SHIFT = 0.95  # Raise pitch by ~5%
+    ELDERLY_FEMALE_SPEED = 0.88  # Slow to 88% speed
     
     MODELS = {
         'original': {
@@ -46,12 +53,12 @@ class VitsTTSService:
     
     # Silence duration in milliseconds for each punctuation type
     PUNCTUATION_SILENCE_MAP = {
-        '.': 500,  # Period
-        '?': 500,  # Question mark
-        '!': 500,  # Exclamation mark
-        ',': 250,  # Comma
-        ';': 350,  # Semicolon
-        ':': 300,  # Colon
+        '.': 300,  # Period
+        '?': 350,  # Question mark
+        '!': 250,  # Exclamation mark
+        ',': 150,  # Comma
+        ';': 200,  # Semicolon
+        ':': 200,  # Colon
     }
     
     def __init__(self, default_model: str = 'original'):
@@ -222,15 +229,17 @@ class VitsTTSService:
         self,
         text: str,
         model: VitsModel,
-        tokenizer: VitsTokenizer
+        tokenizer: VitsTokenizer,
+        punctuation: str = ''
     ) -> AudioSegment:
         """
-        Generate audio for a single text segment
+        Generate audio for a single text segment with intonation based on punctuation
         
         Args:
             text: Text segment to synthesize
             model: VITS model
             tokenizer: VITS tokenizer
+            punctuation: Punctuation following the segment (affects intonation)
             
         Returns:
             AudioSegment with the generated audio
@@ -239,9 +248,26 @@ class VitsTTSService:
         inputs = tokenizer(text, return_tensors="pt")
         input_ids = inputs.input_ids.to(self.device)
         
-        # Generate speech
+        # Set intonation parameters based on punctuation
+        # Default values
+        noise_scale = 0.667
+        speaking_rate = 1.0
+        
+        # Adjust based on punctuation
+        if punctuation == '?':
+            noise_scale = 0.8  # Rising intonation
+            speaking_rate = 0.95  # Slightly slower
+        elif punctuation == '!':
+            noise_scale = 0.9  # More expressive
+            speaking_rate = 1.1  # Slightly faster
+        elif punctuation == '.':
+            noise_scale = 0.5  # Calm, falling intonation
+            speaking_rate = 0.95  # Slightly slower
+        # For ',' and default/none, use default values (0.667, 1.0)
+        
+        # Generate speech with intonation parameters
         with torch.no_grad():
-            outputs = model(input_ids)
+            outputs = model(input_ids, noise_scale=noise_scale, speaking_rate=speaking_rate)
             waveform = outputs.waveform.squeeze()
         
         # Move to CPU and convert to numpy
@@ -263,7 +289,7 @@ class VitsTTSService:
             with wave.open(temp_path, 'wb') as wf:
                 wf.setnchannels(1)  # Mono
                 wf.setsampwidth(2)  # 16-bit
-                wf.setframerate(16000)  # 16kHz sample rate
+                wf.setframerate(self.SAMPLE_RATE)  # 16kHz sample rate
                 wf.writeframes(waveform_int16.tobytes())
             
             # Load as AudioSegment
@@ -298,14 +324,14 @@ class VitsTTSService:
         
         # If only one segment and no punctuation, use direct generation as fallback
         if len(segments) == 1 and segments[0][1] == '':
-            return self._generate_segment_audio(text.strip(), model, tokenizer)
+            return self._generate_segment_audio(text.strip(), model, tokenizer, punctuation='')
         
         # Generate audio for each segment and add silence
         combined_audio = None
         
         for segment_text, punctuation in segments:
-            # Generate audio for this segment
-            segment_audio = self._generate_segment_audio(segment_text, model, tokenizer)
+            # Generate audio for this segment with punctuation-based intonation
+            segment_audio = self._generate_segment_audio(segment_text, model, tokenizer, punctuation=punctuation)
             
             # Add to combined audio
             if combined_audio is None:
@@ -318,17 +344,70 @@ class VitsTTSService:
             if silence_duration > 0:
                 silence = AudioSegment.silent(
                     duration=silence_duration,
-                    frame_rate=16000
+                    frame_rate=self.SAMPLE_RATE
                 )
                 combined_audio += silence
         
         return combined_audio
     
+    def _apply_voice_preset(self, audio_segment: AudioSegment, preset: str) -> AudioSegment:
+        """
+        Apply voice preset using pitch shifting and speed changes
+        
+        Args:
+            audio_segment: Input audio segment
+            preset: Voice preset ('default', 'elderly_male', 'elderly_female')
+            
+        Returns:
+            Modified AudioSegment with applied preset
+        """
+        if preset == 'default' or not preset:
+            # No changes for default preset
+            return audio_segment
+        
+        if preset == 'elderly_male':
+            # Lower pitch by ~15% and slow down to 90% speed
+            # Technique: pretend audio is faster (higher frame_rate), then force back to original
+            # This lowers pitch while maintaining duration
+            shifted = audio_segment._spawn(
+                audio_segment.raw_data,
+                overrides={"frame_rate": int(audio_segment.frame_rate * self.ELDERLY_MALE_PITCH_SHIFT)}
+            ).set_frame_rate(self.SAMPLE_RATE)
+            
+            # Now slow down slightly (90% speed = 1/0.9 = 1.111 speedup factor reversed)
+            # Use frame rate manipulation for speed change
+            slowed = shifted._spawn(
+                shifted.raw_data,
+                overrides={"frame_rate": int(self.SAMPLE_RATE * self.ELDERLY_MALE_SPEED)}
+            ).set_frame_rate(self.SAMPLE_RATE)
+            
+            return slowed
+        
+        elif preset == 'elderly_female':
+            # Raise pitch slightly by ~5% and slow down to 88% speed
+            shifted = audio_segment._spawn(
+                audio_segment.raw_data,
+                overrides={"frame_rate": int(audio_segment.frame_rate * self.ELDERLY_FEMALE_PITCH_SHIFT)}
+            ).set_frame_rate(self.SAMPLE_RATE)
+            
+            # Slow down to 88% speed
+            slowed = shifted._spawn(
+                shifted.raw_data,
+                overrides={"frame_rate": int(self.SAMPLE_RATE * self.ELDERLY_FEMALE_SPEED)}
+            ).set_frame_rate(self.SAMPLE_RATE)
+            
+            return slowed
+        
+        else:
+            # Unknown preset, return unchanged
+            return audio_segment
+    
     def generate_speech(
         self,
         text: str,
         model_version: Optional[str] = None,
-        output_format: str = 'mp3'
+        output_format: str = 'mp3',
+        voice_preset: str = 'default'
     ) -> bytes:
         """
         Generate speech from text using specified model
@@ -337,6 +416,7 @@ class VitsTTSService:
             text: Kurdish text to synthesize
             model_version: Model version to use (default: self.default_model)
             output_format: Output audio format ('mp3', 'wav')
+            voice_preset: Voice preset to apply ('default', 'elderly_male', 'elderly_female')
             
         Returns:
             Audio bytes in specified format
@@ -353,6 +433,9 @@ class VitsTTSService:
             
             # Use punctuation-aware preprocessing
             audio_segment = self._preprocess_and_generate(text, model, tokenizer)
+            
+            # Apply voice preset (pitch shifting and speed changes)
+            audio_segment = self._apply_voice_preset(audio_segment, voice_preset)
             
             # Convert to desired format
             output_buffer = io.BytesIO()

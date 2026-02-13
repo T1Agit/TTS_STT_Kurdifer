@@ -96,13 +96,14 @@ class TTSSTTServiceBase44:
                 self._vits_service = None
         return self._vits_service
     
-    def _generate_speech_vits(self, text: str, model_version: str = 'original') -> bytes:
+    def _generate_speech_vits(self, text: str, model_version: str = 'original', voice_preset: str = 'default') -> bytes:
         """
         Generate speech using VITS TTS for Kurdish
         
         Args:
             text: Text to convert to speech
             model_version: VITS model version ('original' or 'trained_v8')
+            voice_preset: Voice preset ('default', 'elderly_male', 'elderly_female')
             
         Returns:
             Audio bytes in MP3 format
@@ -116,7 +117,8 @@ class TTSSTTServiceBase44:
             audio_bytes = vits_service.generate_speech(
                 text=text,
                 model_version=model_version,
-                output_format='mp3'
+                output_format='mp3',
+                voice_preset=voice_preset
             )
             
             return audio_bytes
@@ -271,7 +273,8 @@ class TTSSTTServiceBase44:
         language: str = 'en',
         audio_format: str = 'mp3',
         model_version: str = None,
-        use_vits: bool = True
+        use_vits: bool = True,
+        voice_preset: str = 'default'
     ) -> Dict[str, str]:
         """
         Convert text to speech and encode to Base44
@@ -282,6 +285,7 @@ class TTSSTTServiceBase44:
             audio_format: Audio format ('mp3', 'wav', 'ogg')
             model_version: Model version for Kurdish VITS ('original', 'trained_v8')
             use_vits: Use VITS for Kurdish instead of Coqui TTS (default: True)
+            voice_preset: Voice preset ('default', 'elderly_male', 'elderly_female')
             
         Returns:
             Dictionary with audio data and metadata
@@ -297,10 +301,11 @@ class TTSSTTServiceBase44:
                 # Try VITS first if enabled
                 if use_vits:
                     try:
-                        print(f"   Using VITS TTS (model: {model_version or 'original'})")
+                        print(f"   Using VITS TTS (model: {model_version or 'original'}, preset: {voice_preset})")
                         audio_bytes = self._generate_speech_vits(
                             text,
-                            model_version=model_version or 'original'
+                            model_version=model_version or 'original',
+                            voice_preset=voice_preset
                         )
                         
                         # Encode to Base44
