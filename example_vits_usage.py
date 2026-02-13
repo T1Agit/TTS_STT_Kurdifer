@@ -84,7 +84,7 @@ def example_ab_comparison():
     print("=" * 70)
     
     service = TTSSTTServiceBase44()
-    text = "Rojbûna te pîroz be"
+    text = "Rojbûna te pîroz be"  # Kurdish: "Happy birthday to you"
     
     # Test all available models
     models = ['v8', 'original', 'coqui']

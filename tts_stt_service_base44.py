@@ -8,7 +8,7 @@ for Kurdish, German, French, English, and Turkish languages.
 import io
 import os
 import tempfile
-from typing import Dict
+from typing import Dict, Any
 from gtts import gTTS
 from pydub import AudioSegment
 import speech_recognition as sr
@@ -111,7 +111,7 @@ class TTSSTTServiceBase44:
         
         return self._vits_model_paths
     
-    def get_available_models(self, language: str = 'kurdish') -> Dict[str, any]:
+    def get_available_models(self, language: str = 'kurdish') -> Dict[str, Any]:
         """
         Get list of available TTS models for a language
         
@@ -171,7 +171,7 @@ class TTSSTTServiceBase44:
             model_version: Which model to load ('original' or 'v8')
             
         Returns:
-            Tuple of (model, tokenizer) or None if loading fails
+            Tuple of (model, tokenizer, device) or None if loading fails
         """
         # Check if already loaded
         if model_version in self._vits_models:
@@ -228,6 +228,9 @@ class TTSSTTServiceBase44:
             import torch
             import scipy.io.wavfile as wavfile
             
+            # Constants for audio conversion
+            INT16_MAX = 32767  # Maximum value for 16-bit signed integer audio
+            
             # Load model if needed
             model_data = self._load_vits_model(model_version)
             if model_data is None:
@@ -250,7 +253,7 @@ class TTSSTTServiceBase44:
             with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp_file:
                 temp_path = tmp_file.name
             
-            wavfile.write(temp_path, rate=16000, data=(waveform * 32767).astype('int16'))
+            wavfile.write(temp_path, rate=16000, data=(waveform * INT16_MAX).astype('int16'))
             
             # Read the WAV file
             with open(temp_path, 'rb') as f:
