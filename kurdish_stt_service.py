@@ -98,8 +98,9 @@ class KurdishSTTService:
                 audio = audio.set_channels(1).set_frame_rate(16000)
                 # Get samples as numpy array
                 samples = np.array(audio.get_array_of_samples(), dtype=np.float32)
-                # Normalize int16 to float32 [-1, 1]
-                samples = samples / (2**15)
+                # Normalize based on actual sample width
+                max_value = 2**(audio.sample_width * 8 - 1)
+                samples = samples / max_value
                 data = samples
                 sample_rate = 16000
             elif isinstance(audio_input, io.BytesIO):
@@ -109,8 +110,9 @@ class KurdishSTTService:
                 audio = audio.set_channels(1).set_frame_rate(16000)
                 # Get samples as numpy array
                 samples = np.array(audio.get_array_of_samples(), dtype=np.float32)
-                # Normalize int16 to float32 [-1, 1]
-                samples = samples / (2**15)
+                # Normalize based on actual sample width
+                max_value = 2**(audio.sample_width * 8 - 1)
+                samples = samples / max_value
                 data = samples
                 sample_rate = 16000
             else:
