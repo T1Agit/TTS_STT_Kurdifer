@@ -267,9 +267,9 @@ class VitsTTSService:
             speaking_rate = 0.95  # Slightly slower
         # For ',' and default/none, use default values (0.667, 1.0)
         
-        # Use lock to ensure thread-safe config modification
-        # Note: Each VitsTTSService instance has its own models_cache, so the lock
-        # provides thread safety for concurrent requests to the same service instance
+        # Use lock to ensure thread-safe config modification during generation
+        # This prevents race conditions when multiple threads modify and restore
+        # model.config attributes (noise_scale, speaking_rate) concurrently
         with self._config_lock:
             # Save original config values (with defaults if attributes don't exist)
             original_noise_scale = getattr(model.config, 'noise_scale', 0.667)
