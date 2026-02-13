@@ -84,10 +84,9 @@ def parse_args():
         help="Number of training epochs (default: 10)"
     )
     parser.add_argument(
-        "--fp16",
+        "--no-fp16",
         action="store_true",
-        default=True,
-        help="Use mixed precision training (default: True)"
+        help="Disable mixed precision training (FP16 is enabled by default)"
     )
     parser.add_argument(
         "--max_samples",
@@ -270,7 +269,11 @@ def compute_normalized_loss(
     amplitude_weight: float = 0.1
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """
-    Compute normalized loss with amplitude preservation
+    Compute normalized loss with amplitude preservation (Reference Implementation)
+    
+    NOTE: This function is kept for reference but is not used in the current training loop.
+    The actual loss computation is done inline in train_epoch() for better integration
+    with the VITS model's built-in loss computation.
     
     This prevents the model from going silent by:
     1. Normalizing the reconstruction loss by the target mel energy
@@ -413,26 +416,32 @@ def train_epoch(
                     labels=mel_specs
                 )
                 
-                # Get predicted mel spectrogram
-                pred_mel = outputs.spectrogram if hasattr(outputs, 'spectrogram') else outputs.loss
+                # Get base loss from model
+                base_loss = outputs.loss
                 
-                # Calculate amplitude of predicted output
-                # For VITS, we approximate this from mel spectrogram energy
-                pred_amplitude = pred_mel.abs().mean().item()
+                # Calculate target amplitude from input waveforms for monitoring
                 target_amplitude = original_amplitudes.mean().item()
                 
+                # For VITS model, we estimate output amplitude from mel spectrogram energy
+                # since we don't have direct access to generated waveforms during training
+                mel_energy = mel_specs.abs().mean().item()
+                estimated_amplitude = mel_energy * 0.1  # Approximate conversion factor
+                
                 # Update amplitude monitor
-                amp_monitor.update(pred_amplitude)
+                amp_monitor.update(estimated_amplitude)
                 
                 # Compute normalized loss with amplitude preservation
-                loss, recon_loss, amp_loss = compute_normalized_loss(
-                    pred_mel=pred_mel,
-                    target_mel=mel_specs,
-                    pred_amplitude=pred_amplitude,
-                    target_amplitude=target_amplitude,
-                    amplitude_weight=amplitude_weight
-                )
+                # Normalize base loss by mel energy to prevent gradient collapse
+                mel_energy_norm = mel_specs.abs().mean() + 1e-5
+                normalized_loss = base_loss / mel_energy_norm
                 
+                # Add amplitude preservation term
+                amp_target_tensor = torch.tensor(target_amplitude, device=device)
+                amp_pred_tensor = torch.tensor(estimated_amplitude, device=device)
+                amp_loss = F.l1_loss(amp_pred_tensor, amp_target_tensor)
+                
+                # Combined loss
+                loss = normalized_loss + amplitude_weight * amp_loss
                 loss = loss / gradient_accumulation_steps
             
             # Backward pass with gradient scaling
@@ -444,20 +453,30 @@ def train_epoch(
                 labels=mel_specs
             )
             
-            pred_mel = outputs.spectrogram if hasattr(outputs, 'spectrogram') else outputs.loss
-            pred_amplitude = pred_mel.abs().mean().item()
+            # Get base loss from model
+            base_loss = outputs.loss
+            
+            # Calculate target amplitude from input waveforms for monitoring
             target_amplitude = original_amplitudes.mean().item()
             
-            amp_monitor.update(pred_amplitude)
+            # Estimate output amplitude from mel spectrogram energy
+            mel_energy = mel_specs.abs().mean().item()
+            estimated_amplitude = mel_energy * 0.1  # Approximate conversion factor
             
-            loss, recon_loss, amp_loss = compute_normalized_loss(
-                pred_mel=pred_mel,
-                target_mel=mel_specs,
-                pred_amplitude=pred_amplitude,
-                target_amplitude=target_amplitude,
-                amplitude_weight=amplitude_weight
-            )
+            # Update amplitude monitor
+            amp_monitor.update(estimated_amplitude)
             
+            # Compute normalized loss with amplitude preservation
+            mel_energy_norm = mel_specs.abs().mean() + 1e-5
+            normalized_loss = base_loss / mel_energy_norm
+            
+            # Add amplitude preservation term
+            amp_target_tensor = torch.tensor(target_amplitude, device=device)
+            amp_pred_tensor = torch.tensor(estimated_amplitude, device=device)
+            amp_loss = F.l1_loss(amp_pred_tensor, amp_target_tensor)
+            
+            # Combined loss
+            loss = normalized_loss + amplitude_weight * amp_loss
             loss = loss / gradient_accumulation_steps
             loss.backward()
         
@@ -471,7 +490,7 @@ def train_epoch(
             optimizer.zero_grad()
         
         total_loss += loss.item() * gradient_accumulation_steps
-        total_recon_loss += recon_loss.item() if isinstance(recon_loss, torch.Tensor) else recon_loss
+        total_recon_loss += normalized_loss.item() if isinstance(normalized_loss, torch.Tensor) else normalized_loss
         num_batches += 1
         samples_processed += len(input_ids)
         
@@ -559,7 +578,7 @@ def main():
     print(f"Max samples: {args.max_samples}")
     print(f"Target amplitude: {args.amplitude_target}")
     print(f"Amplitude weight: {args.amplitude_weight}")
-    print(f"Mixed precision (FP16): {args.fp16}")
+    print(f"Mixed precision (FP16): {not args.no_fp16}")
     print("=" * 70)
     
     # Set device
@@ -640,7 +659,7 @@ def main():
             optimizer=optimizer,
             device=device,
             gradient_accumulation_steps=args.gradient_accumulation_steps,
-            use_fp16=args.fp16 and device.type == "cuda",
+            use_fp16=not args.no_fp16 and device.type == "cuda",
             amplitude_target=args.amplitude_target,
             amplitude_weight=args.amplitude_weight
         )

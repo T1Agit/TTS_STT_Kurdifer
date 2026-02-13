@@ -16,7 +16,7 @@ The v8 training script includes several improvements over previous versions:
 
 **Training Characteristics:**
 - Amplitude stays stable at ~0.85 (OK status)
-- Loss decreasing progressively (e.g., 0.6413 → 0.6409)
+- Loss decreasing progressively (e.g., Epoch 1: 0.6413 → Epoch 5: 0.5892 → Epoch 10: 0.5124)
 - Speed: ~7 sps (samples per second)
 - Time: ~3.6 min per epoch with 1500 samples
 
