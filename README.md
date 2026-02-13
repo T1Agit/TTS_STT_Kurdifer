@@ -12,7 +12,7 @@ A complete multilingual Text-to-Speech (TTS) and Speech-to-Text (STT) solution w
 
 ### Speech-to-Text (STT) - NEW!
 - **Kurdish Speech Recognition**: Using facebook/mms-1b-all with Kurdish (kmr) adapter
-- **Automatic Post-Processing**: Built-in dictionary-based correction system with 779+ word corrections
+- **Automatic Post-Processing**: Built-in dictionary-based correction system with 775+ word corrections
 - **Kurdish Character Support**: Full support for ê, î, û, ç, ş
 - **Microphone Recording**: Record audio directly in browser
 - **File Upload**: Drag & drop or browse for audio files (MP3, WAV, OGG, WebM)
@@ -339,7 +339,7 @@ TTS_STT_Kurdifer/
 ├── tts_stt_service_base44.py       # TTS/STT core logic (Python)
 ├── tts-stt-service-base44.js       # TTS/STT service (Node.js, calls Python)
 ├── kurdish_stt_service.py          # Kurdish STT service with post-processing
-├── kurdish_dictionary.py           # 779+ Kurdish word corrections
+├── kurdish_dictionary.py           # 775+ Kurdish word corrections
 ├── kurdish_postprocessor.py        # Post-processing engine for STT
 ├── base44.py                       # Base44 encoding (Python)
 ├── base44.js                       # Base44 encoding (JavaScript/Node.js)

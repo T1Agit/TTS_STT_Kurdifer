@@ -6,7 +6,7 @@ This document describes the Kurdish STT post-processing feature that automatical
 
 The post-processing system consists of three components:
 
-1. **kurdish_dictionary.py** - A comprehensive dictionary of 779+ Kurdish word corrections
+1. **kurdish_dictionary.py** - A comprehensive dictionary of 775+ Kurdish word corrections
 2. **kurdish_postprocessor.py** - The post-processing engine that applies corrections
 3. **Updated kurdish_stt_service.py** - Integration into the STT service
 
@@ -23,7 +23,7 @@ The system corrects typical STT errors including:
 
 ### Comprehensive Dictionary Coverage
 
-The dictionary includes 779+ corrections across all major word categories:
+The dictionary includes 775+ corrections across all major word categories:
 
 | Category | Examples |
 |----------|----------|
@@ -41,7 +41,7 @@ The dictionary includes 779+ corrections across all major word categories:
 | Prepositions | li, di, bi, ji, bo, ber, pêş, paş |
 | Education | dibistan, mamoste, xwendekar, pirtûk |
 | Colors | sor, reş, spî, zer, kesk, şîn |
-| Animals | se, pisîng, hesp, bizin, mih |
+| Animals | pisîng, hesp, bizin, mih, çêlke |
 
 ## Usage
 
@@ -146,7 +146,7 @@ python test_kurdish_postprocessing.py
 ```
 
 The test suite includes:
-- Dictionary size verification (779+ entries)
+- Dictionary size verification (775+ entries)
 - Special character corrections
 - Basic functionality tests
 - Case preservation tests
@@ -171,7 +171,7 @@ KURDISH_CORRECTIONS = {
     "xer": "xêr",        # e → ê
     "sir": "şîr",        # s → ş, i → î
     "bun": "bûn",        # u → û
-    # ... 779+ total corrections
+    # ... 775+ total corrections
 }
 ```
 
@@ -195,7 +195,7 @@ The system processes text word-by-word while preserving:
 
 ## Performance
 
-- **Dictionary size**: 779 corrections
+- **Dictionary size**: 775 corrections
 - **Memory footprint**: ~50KB (dictionary)
 - **Processing speed**: Near-instantaneous for typical sentences
 - **Case handling**: Automatic with pattern preservation
