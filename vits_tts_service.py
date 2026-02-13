@@ -30,6 +30,13 @@ class VitsTTSService:
     
     # Audio conversion constants
     INT16_MAX = 32767  # Maximum value for 16-bit signed integer
+    SAMPLE_RATE = 16000  # VITS model output sample rate
+    
+    # Voice preset constants
+    ELDERLY_MALE_PITCH_SHIFT = 1.15  # Lower pitch by ~15%
+    ELDERLY_MALE_SPEED = 0.9  # Slow to 90% speed
+    ELDERLY_FEMALE_PITCH_SHIFT = 0.95  # Raise pitch by ~5%
+    ELDERLY_FEMALE_SPEED = 0.88  # Slow to 88% speed
     
     MODELS = {
         'original': {
@@ -282,7 +289,7 @@ class VitsTTSService:
             with wave.open(temp_path, 'wb') as wf:
                 wf.setnchannels(1)  # Mono
                 wf.setsampwidth(2)  # 16-bit
-                wf.setframerate(16000)  # 16kHz sample rate
+                wf.setframerate(self.SAMPLE_RATE)  # 16kHz sample rate
                 wf.writeframes(waveform_int16.tobytes())
             
             # Load as AudioSegment
@@ -337,7 +344,7 @@ class VitsTTSService:
             if silence_duration > 0:
                 silence = AudioSegment.silent(
                     duration=silence_duration,
-                    frame_rate=16000
+                    frame_rate=self.SAMPLE_RATE
                 )
                 combined_audio += silence
         
@@ -364,15 +371,15 @@ class VitsTTSService:
             # This lowers pitch while maintaining duration
             shifted = audio_segment._spawn(
                 audio_segment.raw_data,
-                overrides={"frame_rate": int(audio_segment.frame_rate * 1.15)}
-            ).set_frame_rate(16000)
+                overrides={"frame_rate": int(audio_segment.frame_rate * self.ELDERLY_MALE_PITCH_SHIFT)}
+            ).set_frame_rate(self.SAMPLE_RATE)
             
             # Now slow down slightly (90% speed = 1/0.9 = 1.111 speedup factor reversed)
             # Use frame rate manipulation for speed change
             slowed = shifted._spawn(
                 shifted.raw_data,
-                overrides={"frame_rate": int(16000 * 0.9)}
-            ).set_frame_rate(16000)
+                overrides={"frame_rate": int(self.SAMPLE_RATE * self.ELDERLY_MALE_SPEED)}
+            ).set_frame_rate(self.SAMPLE_RATE)
             
             return slowed
         
@@ -380,14 +387,14 @@ class VitsTTSService:
             # Raise pitch slightly by ~5% and slow down to 88% speed
             shifted = audio_segment._spawn(
                 audio_segment.raw_data,
-                overrides={"frame_rate": int(audio_segment.frame_rate * 0.95)}
-            ).set_frame_rate(16000)
+                overrides={"frame_rate": int(audio_segment.frame_rate * self.ELDERLY_FEMALE_PITCH_SHIFT)}
+            ).set_frame_rate(self.SAMPLE_RATE)
             
             # Slow down to 88% speed
             slowed = shifted._spawn(
                 shifted.raw_data,
-                overrides={"frame_rate": int(16000 * 0.88)}
-            ).set_frame_rate(16000)
+                overrides={"frame_rate": int(self.SAMPLE_RATE * self.ELDERLY_FEMALE_SPEED)}
+            ).set_frame_rate(self.SAMPLE_RATE)
             
             return slowed
         
