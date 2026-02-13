@@ -1,14 +1,25 @@
 # 🎤 Kurdish TTS/STT API with Base44 Encoding
 
-A multilingual Text-to-Speech (TTS) and Speech-to-Text (STT) API with custom Base44 encoding for efficient audio transfer. **Now featuring high-quality Kurdish (Kurmanji) TTS with Coqui XTTS v2!**
+A complete multilingual Text-to-Speech (TTS) and Speech-to-Text (STT) solution with custom Base44 encoding for efficient audio transfer. **Now featuring both high-quality Kurdish (Kurmanji) TTS with VITS models and Kurdish STT with MMS-1B!**
 
 ## 🌟 Features
 
+### Text-to-Speech (TTS)
 - **5 Languages**: Kurdish (Kurdî), English, German, French, Turkish
-- **Kurdish XTTS v2**: High-quality neural TTS for Kurdish using state-of-the-art multilingual model
+- **Kurdish VITS v8**: Fine-tuned VITS model for high-quality Kurdish speech synthesis
+- **Multiple TTS Engines**: VITS (Kurdish), gTTS (other languages)
 - **Base44 Encoding**: Efficient audio encoding (1.47x compression)
-- **REST API**: Simple HTTP endpoints
-- **Web UI**: Browser-based interface
+
+### Speech-to-Text (STT) - NEW!
+- **Kurdish Speech Recognition**: Using facebook/mms-1b-all with Kurdish (kmr) adapter
+- **Kurdish Character Support**: Full support for ê, î, û, ç, ş
+- **Microphone Recording**: Record audio directly in browser
+- **File Upload**: Drag & drop or browse for audio files (MP3, WAV, OGG, WebM)
+- **Confidence Scores**: Get transcription confidence metrics
+
+### General
+- **Unified Web UI**: Tabbed interface with TTS and STT in one place
+- **REST API**: Simple HTTP endpoints for both TTS and STT
 - **Railway Deployed**: Live 24/7
 - **Secure**: Zero npm vulnerabilities, secure Python dependencies
 
@@ -21,6 +32,18 @@ A multilingual Text-to-Speech (TTS) and Speech-to-Text (STT) API with custom Bas
 
 ### 🔗 API Endpoint
 **[https://ttststtkurdifer-production.up.railway.app](https://ttststtkurdifer-production.up.railway.app)**
+
+### 📸 Screenshots
+
+#### Text-to-Speech Tab
+![TTS Tab](https://github.com/user-attachments/assets/960ee2dd-d8f2-4206-a2f3-2dce656e84cc)
+
+Features Kurdish text input with special character buttons (ê, î, û, ç, ş), language selection, and model selection for Kurdish.
+
+#### Speech-to-Text Tab
+![STT Tab](https://github.com/user-attachments/assets/bd90f10e-e289-46b4-b8b3-f57d1687dc99)
+
+Features audio file upload with drag & drop, microphone recording, and displays transcribed Kurdish text with proper character support.
 
 ---
 
@@ -67,22 +90,82 @@ Content-Type: application/json
 }
 ```
 
+### 4. Speech-to-Text (STT) - NEW!
+```bash
+POST /stt
+Content-Type: application/json
+
+{
+  "audio": "DAMc3XX6M5QeVe66PDYfMO8fLGGc..."
+}
+```
+
+**Or upload file (local example):**
+```bash
+# Local development
+curl -X POST http://localhost:5000/stt \
+  -F "audio=@kurdish_audio.mp3"
+
+# Production
+curl -X POST https://ttststtkurdifer-production.up.railway.app/stt \
+  -F "audio=@kurdish_audio.mp3"
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "text": "Silav, tu çawa yî?",
+  "language": "kmr",
+  "confidence": 0.95,
+  "duration": 2.5
+}
+```
+
+### 5. STT Status Check
+```bash
+GET /stt/status
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "available": true,
+  "model": "facebook/mms-1b-all",
+  "language": "kmr (Kurdish Kurmanji)"
+}
+```
+
 ---
 
 ## 🖥️ Quick Start
 
 ### Option 1: Use the Web Interface
-1. Go to **[https://t1agit.github.io/TTS_STT_Kurdifer/](https://t1agit.github.io/TTS_STT_Kurdifer/)**
-2. Enter text
-3. Select language
-4. Click "Generate Speech"
-5. Listen to the audio!
+1. Go to **[https://t1agit.github.io/TTS_STT_Kurdifer/](https://t1agit.github.io/TTS_STT_Kurdifer/)** or run locally
+2. **For TTS (Text-to-Speech):**
+   - Enter Kurdish text (use special character buttons: ê, î, û, ç, ş)
+   - Select language and model
+   - Click "Generate Speech"
+   - Listen to the generated audio!
+3. **For STT (Speech-to-Text):**
+   - Switch to "Speech-to-Text" tab
+   - Upload an audio file (drag & drop or browse)
+   - Or click "Record Audio" to record from microphone
+   - Click "Transcribe Audio"
+   - See the Kurdish text transcription with proper characters!
 
-### Option 2: Use cURL
+### Option 2: Use cURL for TTS
 ```bash
 curl -X POST https://ttststtkurdifer-production.up.railway.app/tts \
   -H "Content-Type: application/json" \
   -d '{"text": "Silav, tu çawa yî?", "language": "kurdish"}'
+```
+
+### Option 3: Use cURL for STT
+```bash
+curl -X POST http://localhost:5000/stt \
+  -F "audio=@kurdish_audio.mp3"
 ```
 
 ### Option 3: Use JavaScript
@@ -533,11 +616,15 @@ COQUI_TOS_AGREED=1          # Auto-accept Coqui TOS (for CI/automated setups)
 ## 📝 Status & Features
 
 ### ✅ Completed
-- [x] Web UI with multi-language support
+- [x] Web UI with tabbed interface (TTS & STT)
 - [x] Railway deployment (24/7 live)
 - [x] Multi-language support (5 languages)
 - [x] Base44 encoding for efficient audio transfer
-- [x] **Kurdish XTTS v2 integration** (high-quality neural TTS)
+- [x] **Kurdish VITS TTS integration** (fine-tuned v8 model)
+- [x] **Kurdish STT implementation** (facebook/mms-1b-all with kmr adapter)
+- [x] Microphone recording support in web UI
+- [x] Audio file upload with drag & drop
+- [x] Kurdish special character support (ê, î, û, ç, ş)
 - [x] Automated Kurdish TTS setup script
 - [x] Comprehensive documentation
 - [x] Python and Node.js implementations
@@ -545,7 +632,6 @@ COQUI_TOS_AGREED=1          # Auto-accept Coqui TOS (for CI/automated setups)
 - [x] Full test coverage
 
 ### 🚧 In Progress / Future
-- [ ] Speech-to-Text (STT) implementation
 - [ ] Voice cloning with XTTS v2
 - [ ] Custom Kurdish voice training guide
 - [ ] Raspberry Pi setup guide
