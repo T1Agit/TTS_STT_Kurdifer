@@ -11,7 +11,10 @@ import os
 import tempfile
 from typing import Dict, Optional, Any
 import torch
-import torchaudio
+import soundfile as sf
+import numpy as np
+from scipy import signal
+from pydub import AudioSegment
 from transformers import Wav2Vec2ForCTC, AutoProcessor
 
 
@@ -86,31 +89,49 @@ class KurdishSTTService:
         """
         try:
             if isinstance(audio_input, str):
-                # Load from file path
-                waveform, sample_rate = torchaudio.load(audio_input)
+                # Load from file path using soundfile
+                data, sample_rate = sf.read(audio_input, dtype='float32')
             elif isinstance(audio_input, bytes):
-                # Load from bytes
-                audio_buffer = io.BytesIO(audio_input)
-                waveform, sample_rate = torchaudio.load(audio_buffer)
+                # Load from bytes using pydub
+                audio = AudioSegment.from_file(io.BytesIO(audio_input))
+                # Convert to mono and 16kHz
+                audio = audio.set_channels(1).set_frame_rate(16000)
+                # Get samples as numpy array
+                samples = np.array(audio.get_array_of_samples(), dtype=np.float32)
+                # Normalize int16 to float32 [-1, 1]
+                samples = samples / (2**15)
+                data = samples
+                sample_rate = 16000
             elif isinstance(audio_input, io.BytesIO):
-                # Load from BytesIO
-                waveform, sample_rate = torchaudio.load(audio_input)
+                # Load from BytesIO using pydub
+                audio = AudioSegment.from_file(audio_input)
+                # Convert to mono and 16kHz
+                audio = audio.set_channels(1).set_frame_rate(16000)
+                # Get samples as numpy array
+                samples = np.array(audio.get_array_of_samples(), dtype=np.float32)
+                # Normalize int16 to float32 [-1, 1]
+                samples = samples / (2**15)
+                data = samples
+                sample_rate = 16000
             else:
                 raise ValueError(f"Unsupported audio input type: {type(audio_input)}")
             
-            # Convert to mono if stereo
-            if waveform.shape[0] > 1:
-                waveform = torch.mean(waveform, dim=0, keepdim=True)
+            # Convert to torch tensor
+            if len(data.shape) > 1:
+                # Convert stereo to mono if needed
+                data = np.mean(data, axis=1)
             
-            # Resample to 16kHz if needed
-            if sample_rate != self.SAMPLE_RATE:
-                resampler = torchaudio.transforms.Resample(
-                    orig_freq=sample_rate,
-                    new_freq=self.SAMPLE_RATE
-                )
-                waveform = resampler(waveform)
+            waveform = torch.from_numpy(data).float()
             
-            return waveform.squeeze()
+            # Resample to 16kHz if needed (for file inputs)
+            if sample_rate != self.SAMPLE_RATE and isinstance(audio_input, str):
+                # Use scipy for resampling
+                num_samples = int(len(waveform) * self.SAMPLE_RATE / sample_rate)
+                waveform_np = waveform.numpy()
+                resampled = signal.resample(waveform_np, num_samples)
+                waveform = torch.from_numpy(resampled).float()
+            
+            return waveform
             
         except Exception as e:
             print(f"❌ Error loading audio: {e}")
