@@ -126,7 +126,7 @@ Existing integration tests (`test_vits_integration.py`) continue to pass, confir
 ```python
 from vits_tts_service import VitsTTSService
 
-service = VitsTTSService(default_model='original')
+service = VitsTTSService()  # Uses trained_v8 by default
 audio_bytes = service.generate_speech(
     text="Silav, tu çawa yî? Ez baş im.",
     output_format='mp3'

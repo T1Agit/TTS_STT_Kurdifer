@@ -62,7 +62,7 @@ class VitsTTSService:
         ':': 200,  # Colon
     }
     
-    def __init__(self, default_model: str = 'original'):
+    def __init__(self, default_model: str = 'trained_v8'):
         """
         Initialize VITS TTS service
         
@@ -520,7 +520,7 @@ def test_vits_service():
     print("=" * 70)
     
     # Initialize service
-    service = VitsTTSService(default_model='original')
+    service = VitsTTSService(default_model='trained_v8')
     
     # List available models
     print("\n📋 Available models:")

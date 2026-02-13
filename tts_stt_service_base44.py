@@ -89,14 +89,14 @@ class TTSSTTServiceBase44:
         if self._vits_service is None:
             try:
                 from vits_tts_service import VitsTTSService
-                self._vits_service = VitsTTSService(default_model='original')
+                self._vits_service = VitsTTSService(default_model='trained_v8')
                 print("✅ VITS TTS service initialized")
             except ImportError as e:
                 print(f"⚠️  VITS TTS not available: {e}")
                 self._vits_service = None
         return self._vits_service
     
-    def _generate_speech_vits(self, text: str, model_version: str = 'original', voice_preset: str = 'default') -> bytes:
+    def _generate_speech_vits(self, text: str, model_version: str = 'trained_v8', voice_preset: str = 'default') -> bytes:
         """
         Generate speech using VITS TTS for Kurdish
         
@@ -301,10 +301,10 @@ class TTSSTTServiceBase44:
                 # Try VITS first if enabled
                 if use_vits:
                     try:
-                        print(f"   Using VITS TTS (model: {model_version or 'original'}, preset: {voice_preset})")
+                        print(f"   Using VITS TTS (model: {model_version or 'trained_v8'}, preset: {voice_preset})")
                         audio_bytes = self._generate_speech_vits(
                             text,
-                            model_version=model_version or 'original',
+                            model_version=model_version or 'trained_v8',
                             voice_preset=voice_preset
                         )
                         
@@ -321,7 +321,7 @@ class TTSSTTServiceBase44:
                             'size': len(audio_bytes),
                             'encoded_size': len(audio_base44),
                             'compression_ratio': len(audio_base44) / len(audio_bytes),
-                            'model': model_version or 'original',
+                            'model': model_version or 'trained_v8',
                             'engine': 'vits'
                         }
                     except Exception as e:
