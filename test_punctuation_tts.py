@@ -82,12 +82,12 @@ def test_silence_duration():
         
         # Expected silence durations
         expected_durations = {
-            '.': 500,
-            '?': 500,
-            '!': 500,
-            ',': 250,
-            ';': 350,
-            ':': 300,
+            '.': 300,
+            '?': 350,
+            '!': 250,
+            ',': 150,
+            ';': 200,
+            ':': 200,
             '': 0,
             'x': 0,  # Unknown punctuation
         }
