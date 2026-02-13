@@ -195,20 +195,22 @@ class VitsTTSService:
             with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp_file:
                 temp_path = tmp_file.name
             
-            # Save waveform (VITS outputs at 16kHz)
-            torchaudio.save(
-                temp_path,
-                waveform_cpu.unsqueeze(0),
-                sample_rate=16000,
-                format='wav'
-            )
-            
-            # Read the WAV file
-            with open(temp_path, 'rb') as f:
-                wav_bytes = f.read()
-            
-            # Clean up temp file
-            os.unlink(temp_path)
+            try:
+                # Save waveform (VITS outputs at 16kHz)
+                torchaudio.save(
+                    temp_path,
+                    waveform_cpu.unsqueeze(0),
+                    sample_rate=16000,
+                    format='wav'
+                )
+                
+                # Read the WAV file
+                with open(temp_path, 'rb') as f:
+                    wav_bytes = f.read()
+            finally:
+                # Ensure cleanup happens even if an error occurs
+                if os.path.exists(temp_path):
+                    os.unlink(temp_path)
             
             # Convert to desired format if needed
             if output_format.lower() == 'mp3':

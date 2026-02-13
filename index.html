@@ -269,13 +269,18 @@
         const modelSelect = document.getElementById('model');
         
         // Show/hide model selector based on language
-        languageSelect.addEventListener('change', () => {
+        function updateModelSelector() {
             if (languageSelect.value === 'kurdish') {
                 modelGroup.style.display = 'block';
             } else {
                 modelGroup.style.display = 'none';
             }
-        });
+        }
+        
+        languageSelect.addEventListener('change', updateModelSelector);
+        
+        // Check initial state on page load
+        updateModelSelector();
         
         // Check API health on load
         checkAPIHealth();

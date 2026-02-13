@@ -39,10 +39,17 @@ def tts():
     data = request.json
     text = data.get('text')
     language = data.get('language', 'english')
-    model_version = data.get('model_version', 'original')  # Support model selection
+    model_version = data.get('model_version', 'original')  # Support model selection for Kurdish
     
     if not text:
         return jsonify({'success': False, 'error': 'Missing text'}), 400
+    
+    # Validate model_version is only used for Kurdish
+    if model_version and model_version != 'original' and language not in ['kurdish', 'ku']:
+        return jsonify({
+            'success': False, 
+            'error': 'model_version parameter is only supported for Kurdish language'
+        }), 400
     
     try:
         result = service.text_to_speech_base44(
