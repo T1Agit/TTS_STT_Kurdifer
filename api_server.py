@@ -39,17 +39,31 @@ def tts():
     data = request.json
     text = data.get('text')
     language = data.get('language', 'english')
+    model_version = data.get('model_version', 'original')  # Support model selection for Kurdish
     
     if not text:
         return jsonify({'success': False, 'error': 'Missing text'}), 400
     
+    # Validate model_version is only used for Kurdish
+    if model_version and model_version != 'original' and language not in ['kurdish', 'ku']:
+        return jsonify({
+            'success': False, 
+            'error': 'model_version parameter is only supported for Kurdish language'
+        }), 400
+    
     try:
-        result = service.text_to_speech_base44(text, language)
+        result = service.text_to_speech_base44(
+            text, 
+            language,
+            model_version=model_version
+        )
         return jsonify({
             'success': True,
             'audio': result['audio'],
             'format': result['format'],
-            'language': result['language']
+            'language': result['language'],
+            'model': result.get('model', 'unknown'),
+            'engine': result.get('engine', 'unknown')
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -57,6 +71,28 @@ def tts():
 @app.route('/languages', methods=['GET'])
 def languages():
     return jsonify({'languages': list(service.SUPPORTED_LANGUAGES.keys())})
+
+@app.route('/models', methods=['GET'])
+def models():
+    """List available TTS models for Kurdish"""
+    try:
+        vits_service = service._get_vits_service()
+        if vits_service:
+            available_models = vits_service.list_available_models()
+            return jsonify({
+                'success': True,
+                'models': available_models
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'VITS service not available'
+            }), 503
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))

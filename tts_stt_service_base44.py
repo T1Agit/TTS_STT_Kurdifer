@@ -34,6 +34,7 @@ class TTSSTTServiceBase44:
         self._coqui_tts = None  # Lazy initialization for Coqui TTS
         self._fine_tuned_model_path = None  # Path to fine-tuned Kurdish model
         self._use_fine_tuned = False  # Flag to indicate if fine-tuned model is loaded
+        self._vits_service = None  # Lazy initialization for VITS TTS
         self._check_fine_tuned_model()
     
     def _get_language_code(self, language: str) -> str:
@@ -82,6 +83,47 @@ class TTSSTTServiceBase44:
             True if language needs Coqui TTS, False otherwise
         """
         return lang_code == 'ku'
+    
+    def _get_vits_service(self):
+        """Lazy initialization of VITS TTS service"""
+        if self._vits_service is None:
+            try:
+                from vits_tts_service import VitsTTSService
+                self._vits_service = VitsTTSService(default_model='original')
+                print("✅ VITS TTS service initialized")
+            except ImportError as e:
+                print(f"⚠️  VITS TTS not available: {e}")
+                self._vits_service = None
+        return self._vits_service
+    
+    def _generate_speech_vits(self, text: str, model_version: str = 'original') -> bytes:
+        """
+        Generate speech using VITS TTS for Kurdish
+        
+        Args:
+            text: Text to convert to speech
+            model_version: VITS model version ('original' or 'trained_v8')
+            
+        Returns:
+            Audio bytes in MP3 format
+        """
+        try:
+            vits_service = self._get_vits_service()
+            if vits_service is None:
+                raise ImportError("VITS TTS service not available")
+            
+            # Generate speech using VITS
+            audio_bytes = vits_service.generate_speech(
+                text=text,
+                model_version=model_version,
+                output_format='mp3'
+            )
+            
+            return audio_bytes
+            
+        except Exception as e:
+            print(f"❌ VITS TTS error: {e}")
+            raise RuntimeError(f"VITS TTS generation failed: {e}") from e
     
     def _generate_speech_coqui(self, text: str, lang_code: str) -> bytes:
         """
@@ -227,7 +269,9 @@ class TTSSTTServiceBase44:
         self,
         text: str,
         language: str = 'en',
-        audio_format: str = 'mp3'
+        audio_format: str = 'mp3',
+        model_version: str = None,
+        use_vits: bool = True
     ) -> Dict[str, str]:
         """
         Convert text to speech and encode to Base44
@@ -236,6 +280,8 @@ class TTSSTTServiceBase44:
             text: Text to convert to speech
             language: Target language (e.g., 'en', 'english', 'ku')
             audio_format: Audio format ('mp3', 'wav', 'ogg')
+            model_version: Model version for Kurdish VITS ('original', 'trained_v8')
+            use_vits: Use VITS for Kurdish instead of Coqui TTS (default: True)
             
         Returns:
             Dictionary with audio data and metadata
@@ -246,8 +292,38 @@ class TTSSTTServiceBase44:
             
             print(f"🎤 Generating speech: '{text[:50]}...' in {lang_code}")
             
-            # Check if we need to use Coqui TTS for Kurdish
+            # Check if we need to use Kurdish TTS
             if self._uses_coqui_tts(lang_code):
+                # Try VITS first if enabled
+                if use_vits:
+                    try:
+                        print(f"   Using VITS TTS (model: {model_version or 'original'})")
+                        audio_bytes = self._generate_speech_vits(
+                            text,
+                            model_version=model_version or 'original'
+                        )
+                        
+                        # Encode to Base44
+                        audio_base44 = encode(audio_bytes)
+                        
+                        print(f"✅ Success! Size: {len(audio_bytes)} bytes → {len(audio_base44)} chars")
+                        
+                        return {
+                            'audio': audio_base44,
+                            'language': lang_code,
+                            'format': audio_format,
+                            'text': text,
+                            'size': len(audio_bytes),
+                            'encoded_size': len(audio_base44),
+                            'compression_ratio': len(audio_base44) / len(audio_bytes),
+                            'model': model_version or 'original',
+                            'engine': 'vits'
+                        }
+                    except Exception as e:
+                        print(f"⚠️  VITS TTS failed: {e}")
+                        print("   Falling back to Coqui TTS...")
+                        # Fall through to Coqui TTS
+                
                 # Generate speech using Coqui TTS
                 audio_bytes = self._generate_speech_coqui(text, lang_code)
                 
@@ -263,7 +339,8 @@ class TTSSTTServiceBase44:
                     'text': text,
                     'size': len(audio_bytes),
                     'encoded_size': len(audio_base44),
-                    'compression_ratio': len(audio_base44) / len(audio_bytes)
+                    'compression_ratio': len(audio_base44) / len(audio_bytes),
+                    'engine': 'coqui'
                 }
             
             # Generate speech using gTTS for other languages
