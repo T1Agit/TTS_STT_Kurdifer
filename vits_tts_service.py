@@ -167,25 +167,23 @@ class VitsTTSService:
         # Matches text followed by one of: . ? ! , ; :
         pattern = r'([^.?!,;:]+)([.?!,;:])'
         
-        matches = re.findall(pattern, text)
+        segments = []
+        last_match_end = 0
         
-        if not matches:
+        for match in re.finditer(pattern, text):
+            segment_text = match.group(1).strip()
+            punctuation = match.group(2)
+            if segment_text:  # Skip empty segments
+                segments.append((segment_text, punctuation))
+            last_match_end = match.end()
+        
+        # Handle case with no matches or remaining text after last punctuation
+        if last_match_end == 0:
             # No punctuation found, return the entire text with no punctuation
             stripped = text.strip()
             if stripped:
                 return [(stripped, '')]
             return []
-        
-        segments = []
-        for segment_text, punctuation in matches:
-            stripped = segment_text.strip()
-            if stripped:  # Skip empty segments
-                segments.append((stripped, punctuation))
-        
-        # Handle any remaining text after the last punctuation
-        last_match_end = 0
-        for match in re.finditer(pattern, text):
-            last_match_end = match.end()
         
         if last_match_end < len(text):
             remaining = text[last_match_end:].strip()
@@ -286,8 +284,8 @@ class VitsTTSService:
         # Split text into segments
         segments = self._split_text_on_punctuation(text)
         
-        # If only one segment and no punctuation, use direct generation
-        if len(segments) <= 1 and (not segments or segments[0][1] == ''):
+        # If only one segment and no punctuation, use direct generation as fallback
+        if len(segments) == 1 and segments[0][1] == '':
             return self._generate_segment_audio(text.strip(), model, tokenizer)
         
         # Generate audio for each segment and add silence
