@@ -12,10 +12,12 @@ A complete multilingual Text-to-Speech (TTS) and Speech-to-Text (STT) solution w
 
 ### Speech-to-Text (STT) - NEW!
 - **Kurdish Speech Recognition**: Using facebook/mms-1b-all with Kurdish (kmr) adapter
+- **Automatic Post-Processing**: Built-in dictionary-based correction system with 779+ word corrections
 - **Kurdish Character Support**: Full support for ê, î, û, ç, ş
 - **Microphone Recording**: Record audio directly in browser
 - **File Upload**: Drag & drop or browse for audio files (MP3, WAV, OGG, WebM)
 - **Confidence Scores**: Get transcription confidence metrics
+- **Raw & Corrected Output**: Returns both original and post-processed transcriptions
 
 ### General
 - **Unified Web UI**: Tabbed interface with TTS and STT in one place
@@ -116,11 +118,13 @@ curl -X POST https://ttststtkurdifer-production.up.railway.app/stt \
 {
   "success": true,
   "text": "Silav, tu çawa yî?",
+  "raw_text": "Silav, tu cawa yi?",
   "language": "kmr",
   "confidence": 0.95,
   "duration": 2.5
 }
 ```
+Note: `text` contains the post-processed/corrected transcription, while `raw_text` contains the original STT output.
 
 ### 5. STT Status Check
 ```bash
@@ -334,10 +338,15 @@ TTS_STT_Kurdifer/
 ├── api-server-base44.js            # Express API server (Node.js)
 ├── tts_stt_service_base44.py       # TTS/STT core logic (Python)
 ├── tts-stt-service-base44.js       # TTS/STT service (Node.js, calls Python)
+├── kurdish_stt_service.py          # Kurdish STT service with post-processing
+├── kurdish_dictionary.py           # 779+ Kurdish word corrections
+├── kurdish_postprocessor.py        # Post-processing engine for STT
 ├── base44.py                       # Base44 encoding (Python)
 ├── base44.js                       # Base44 encoding (JavaScript/Node.js)
 ├── setup_kurdish_tts.py            # Automated XTTS v2 setup script
 ├── test_kurdish_implementation.py  # Python unit tests
+├── test_kurdish_postprocessing.py  # Post-processing tests
+├── demo_kurdish_postprocessing.py  # Post-processing demo
 ├── test-integration.js             # Node.js integration tests
 ├── client-example.js               # API client example
 ├── index.html                      # Web UI
@@ -348,7 +357,8 @@ TTS_STT_Kurdifer/
 ├── kurdish_tts_training.ipynb      # Colab training notebook (optional)
 ├── README.md                       # This file
 ├── IMPLEMENTATION_SUMMARY.md       # Implementation details
-└── KURDISH_TTS_IMPLEMENTATION.md   # Kurdish TTS documentation
+├── KURDISH_TTS_IMPLEMENTATION.md   # Kurdish TTS documentation
+└── KURDISH_STT_POSTPROCESSING.md   # Kurdish STT post-processing documentation
 ```
 
 ---
