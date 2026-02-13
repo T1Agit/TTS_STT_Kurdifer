@@ -28,6 +28,9 @@ class VitsTTSService:
     - trained_v8: Fine-tuned model from training/best_model_v8/
     """
     
+    # Audio conversion constants
+    INT16_MAX = 32767  # Maximum value for 16-bit signed integer
+    
     MODELS = {
         'original': {
             'name': 'facebook/mms-tts-kmr-script_latin',
@@ -250,10 +253,11 @@ class VitsTTSService:
         
         try:
             # Convert to numpy array and prepare for WAV writing
-            waveform_np = waveform_cpu.numpy()
+            # Use detach() to ensure tensor is safe to convert (no gradient tracking)
+            waveform_np = waveform_cpu.detach().cpu().numpy()
             # Clip to [-1, 1] range and convert to int16
             waveform_np = np.clip(waveform_np, -1.0, 1.0)
-            waveform_int16 = (waveform_np * 32767).astype(np.int16)
+            waveform_int16 = (waveform_np * self.INT16_MAX).astype(np.int16)
             
             # Write WAV file using Python's built-in wave module
             with wave.open(temp_path, 'wb') as wf:
