@@ -40,6 +40,16 @@ class VitsTTSService:
         }
     }
     
+    # Silence duration in milliseconds for each punctuation type
+    PUNCTUATION_SILENCE_MAP = {
+        '.': 500,  # Period
+        '?': 500,  # Question mark
+        '!': 500,  # Exclamation mark
+        ',': 250,  # Comma
+        ';': 350,  # Semicolon
+        ':': 300,  # Colon
+    }
+    
     def __init__(self, default_model: str = 'original'):
         """
         Initialize VITS TTS service
@@ -202,15 +212,7 @@ class VitsTTSService:
         Returns:
             Duration in milliseconds
         """
-        silence_map = {
-            '.': 500,  # Period
-            '?': 500,  # Question mark
-            '!': 500,  # Exclamation mark
-            ',': 250,  # Comma
-            ';': 350,  # Semicolon
-            ':': 300,  # Colon
-        }
-        return silence_map.get(punctuation, 0)
+        return self.PUNCTUATION_SILENCE_MAP.get(punctuation, 0)
     
     def _generate_segment_audio(
         self,
@@ -291,7 +293,7 @@ class VitsTTSService:
         # Generate audio for each segment and add silence
         combined_audio = None
         
-        for i, (segment_text, punctuation) in enumerate(segments):
+        for segment_text, punctuation in segments:
             # Generate audio for this segment
             segment_audio = self._generate_segment_audio(segment_text, model, tokenizer)
             
